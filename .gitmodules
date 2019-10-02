@@ -1,0 +1,8 @@
+[submodule "octomap"]
+	path = octomap
+	url = https://github.com/mschnur/octomap.git
+	branch = master
+[submodule "original_octomap"]
+	path = original_octomap
+	url = https://github.com/OctoMap/octomap.git
+	branch = master
