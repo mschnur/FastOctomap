@@ -1,4 +1,9 @@
 # FastOctomap
+Just once, you'll need to extract the large data txt file, which can be done by running the script
+```
+./prepare_data_file.sh
+```
+
 Build with
 ```
 ./build.sh
