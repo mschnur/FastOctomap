@@ -41,8 +41,16 @@ ROOT_INSTALL_DIR="${THIS_SCRIPT_DIR}/deploy"
 ORIGINAL_OCTOMAP_INSTALL_DIR="${ROOT_INSTALL_DIR}/original_octomap"
 MOD_OCTOMAP_INSTALL_DIR="${ROOT_INSTALL_DIR}/octomap"
 
+if [ "$1" == "original" ]
+then
 build_octomap_lib "$THIS_SCRIPT_DIR/original_octomap" "$ORIGINAL_OCTOMAP_BUILD_DIR" "$ORIGINAL_OCTOMAP_INSTALL_DIR"
 build_octomap_test "$THIS_SCRIPT_DIR/test_program" "$ORIGINAL_OCTOMAP_BUILD_DIR" "$ORIGINAL_OCTOMAP_INSTALL_DIR" "test_original_octomap"
 
+elif [ "$1" == "fast" ]
+then
 build_octomap_lib "$THIS_SCRIPT_DIR/octomap" "$MOD_OCTOMAP_BUILD_DIR" "$MOD_OCTOMAP_INSTALL_DIR"
 build_octomap_test "$THIS_SCRIPT_DIR/test_program" "$MOD_OCTOMAP_BUILD_DIR" "$MOD_OCTOMAP_INSTALL_DIR" "test_mod_octomap"
+
+else
+echo "Usage: ./build.sh original|fast"
+fi
