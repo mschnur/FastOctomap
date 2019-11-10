@@ -27,7 +27,9 @@ int main(int argc, char** argv)
    
     std::cout << "\nConstructing OcTree object\n===========================\n";
     std::unique_ptr<octomap::OcTree> tree(new octomap::OcTree(0.05));
-   
+    tree->expand();
+    
+
     std::cout << "\nAdding Point Clouds\n===========================\n";
 
     size_t numScans = graph->size();
