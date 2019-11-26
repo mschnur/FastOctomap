@@ -1,3 +1,6 @@
 build/
 deploy/
 data/
+FastOctree/.idea/
+FastOctree/cmake-build-debug/
+FastOctree/cmake-build-release/
