@@ -13,7 +13,7 @@ function build_octomap_lib() {
 	
 	pushd "${build_dir}"
 	cmake -DCMAKE_INSTALL_PREFIX="${install_dir}" ${common_cmake_options} "${src_dir}"
-    make -j$(nproc) install
+    make VERBOSE=1 -j$(nproc) install
 	popd
 };
 
@@ -29,7 +29,7 @@ function build_octomap_test() {
 	
 	pushd "${build_dir}"
 	cmake -DCMAKE_INSTALL_PREFIX="${install_dir}" ${common_cmake_options} "${src_dir}"
-    make -j$(nproc) install
+    make VERBOSE=1 -j$(nproc) install
 	popd
 };
 

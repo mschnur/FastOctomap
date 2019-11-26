@@ -3,10 +3,13 @@
 #include <string>
 #include <iostream>
 #include <memory>
+#include <fstream>
+#include <sstream>
+#include <ios>
 
 void printUsage(const char* self)
 {
-    std::cerr << "\nUSAGE: " << self << " <InputFile>.log\n\n";
+    std::cerr << "\nUSAGE: " << self << " <InputFile>.log/graph\n\n";
     exit(0);
 }
 
@@ -23,8 +26,21 @@ int main(int argc, char** argv)
 
     std::cout << "\nReading Log file\n===========================\n";
     std::unique_ptr<octomap::ScanGraph> graph(new octomap::ScanGraph());
-    graph->readPlainASCII(logFilename);
-   
+
+	std::string extension = logFilename.substr(logFilename.find_last_of(".") + 1);
+	std::transform(extension.begin(), extension.end(), extension.begin(),
+                   [](unsigned char c){ return std::tolower(c); });
+	if(extension == "log") {
+		std::cout << "Detected plain ASCII file" << std::endl;
+		graph->readPlainASCII(logFilename);
+	} else if (extension == "graph") {
+		std::cout << "Detected binary graph file" << std::endl;
+		graph->readBinary(logFilename);
+	} else {
+		std::cerr << "Unknown file type" << std::endl;
+		return -1;
+	}
+
     std::cout << "\nConstructing OcTree object\n===========================\n";
     std::unique_ptr<octomap::OcTree> tree(new octomap::OcTree(0.05));
     tree->expand();
@@ -39,6 +55,20 @@ int main(int argc, char** argv)
 		gettimeofday(&start, NULL);  // start timer
 		tree->insertPointCloud((*scan_it)->scan, (*scan_it)->pose.trans());
         gettimeofday(&stop, NULL);  // start time
+		
+		std::stringstream filenameStream;
+		filenameStream << "octomap_leaf_nodes_after_pointcloud_" << currentScan << ".csv";
+		{
+			std::ofstream outFile(filenameStream.str(), std::ios::trunc);
+			outFile << "depth,centerX,centerY,centerZ,size,value" << std::endl;
+			
+			for(octomap::OcTree::tree_iterator it = tree->begin_tree(), end=tree->end_tree(); it!= end; ++it)
+			{
+				octomap::point3d center = it.getCoordinate();
+			    outFile << it.getDepth() << "," << center.x() << "," << center.y() << "," << center.z() << ","
+				        << it.getSize() << "," << it->getValue() << std::endl;
+			}
+		}
        
         double time_to_insert = (stop.tv_sec - start.tv_sec) + 1.0e-6 *(stop.tv_usec - start.tv_usec);
 	    //std::cout << "Scan #: " << currentScan << std::endl
