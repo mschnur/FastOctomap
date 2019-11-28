@@ -36,6 +36,12 @@ Parallelization:
 - not all threads might get used (partition never gets ray?)
 - recursive partitioning?
 - can i have a queue per thread that other threads add to?
+- I can parallelize the node computation at each recursion level (OpenMP parallel for)
+
+Terminal Logic:
+
+- we can just not add a node to the list of nodes if it is "past" the ray endpoint
+- 
 
 
 ## Plan of tasking
@@ -61,3 +67,10 @@ extracted_node_computations.c
 
 remove_node_switch.c
 - same as above, but replace the loop+switch statement with if statements
+- in progress to replace with only bit manipulation
+
+with_terminal_logic.c
+- as one previous, but re-adding the terminal logic (with some adjustments)
+
+with_terminal_logic_converted.c
+- as one previous, but converting the conditional logic (also removed if statements around next_node)
