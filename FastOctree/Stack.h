@@ -13,12 +13,12 @@ extern "C" {
 
 typedef struct Stack {
     int topIndex;
-    size_t elementSize;
-    size_t capacity;
+    int elementSize;
+    int capacity;
     void *data;
 } Stack;
 
-Stack *Stack__init(size_t elementSize, size_t numElements);
+Stack *Stack__init(int elementSize, int numElements);
 
 void Stack__destroy(Stack *stack);
 
@@ -32,7 +32,9 @@ int Stack__push(Stack *stack, void *element);
 
 int Stack__peek(const Stack *stack, void *peekedElement);
 
-int Stack__pop(Stack *stack, void *poppedElement);
+int Stack__peekAndPop(Stack *stack, void *poppedElement);
+
+int Stack__pop(Stack *stack);
 
 #ifdef __cplusplus
 }

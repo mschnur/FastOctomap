@@ -17,6 +17,9 @@
 #define TRUE 1
 #define FALSE 0
 
+//#define DEBUG_TRACE
+//#define DEBUG_RAY_PARAMETER
+
 const Node* const NO_CHILD = NULL;
 
 const Node* const NO_CHILDREN[8] = {
@@ -217,7 +220,10 @@ void proc_subtree(double tx0, double ty0, double tz0,
                   unsigned int depth,
                   Node* n, unsigned char a, Ray* r)
 {
+#ifdef DEBUG_TRACE
     //printf("proc_subtree, depth=%u\n", depth);
+#endif
+
     double txm, tym, tzm;
     int currentNode;
 
@@ -343,26 +349,42 @@ void ray_parameter(Octree* tree, Ray* r) {
         tree->root = (Node*) calloc(1, sizeof(Node));
     }
 
-    //printf("ray_parameter\n");
+#ifdef DEBUG_TRACE
+    printf("ray_parameter\n");
+#endif
+
     unsigned char a = 0;
 
+#ifdef DEBUG_RAY_PARAMETER
+    printf("Original ray origin: (%lf, %lf, %lf); direction: (%lf, %lf, %lf)\n",
+            r->origin.x, r->origin.y, r->origin.z,
+            r->direction.x, r->direction.y, r->direction.z);
+#endif
+
+    // Since the tree is centered at (0, 0, 0), reflecting the origins is as simple as negating them.
     if (r->direction.x < 0.0f) {
-        r->origin.x = tree->size.x - r->origin.x;
+        r->origin.x = -r->origin.x;
         r->direction.x = -r->direction.x;
         a |= 4u;
     }
 
     if (r->direction.y < 0.0f) {
-        r->origin.y = tree->size.y - r->origin.y;
+        r->origin.y = -r->origin.y;
         r->direction.y = -r->direction.y;
         a |= 2u;
     }
 
     if (r->direction.z < 0.0f) {
-        r->origin.z = tree->size.z - r->origin.z;
+        r->origin.z = -r->origin.z;
         r->direction.z = -r->direction.z;
         a |= 1u;
     }
+
+#ifdef DEBUG_RAY_PARAMETER
+    printf("After potential reflection, ray origin: (%lf, %lf, %lf); direction: (%lf, %lf, %lf)\n",
+           r->origin.x, r->origin.y, r->origin.z,
+           r->direction.x, r->direction.y, r->direction.z);
+#endif
 
     // Improve IEEE double stability
     double rdxInverse = 1.0 / r->direction.x;
@@ -376,12 +398,18 @@ void ray_parameter(Octree* tree, Ray* r) {
     double tz0 = (tree->min.z - r->origin.z) * rdzInverse;
     double tz1 = (tree->max.z - r->origin.z) * rdzInverse;
 
-    //printf("txyz0: %lf %lf %lf\n", tx0, ty0, tz0);
-    //printf("txyz1: %lf %lf %lf\n", tx1, ty1, tz1);
+#ifdef DEBUG_RAY_PARAMETER
+    printf("txyz0: %lf %lf %lf\n", tx0, ty0, tz0);
+    printf("txyz1: %lf %lf %lf\n", tx1, ty1, tz1);
+#endif
 
     if (MAX(MAX(tx0, ty0), tz0) < MIN(MIN(tx1, ty1), tz1))
     {
         proc_subtree(tx0, ty0, tz0, tx1, ty1, tz1, 0, tree->root, a, r);
+    }
+    else
+    {
+        printf("Ray outside of tree bounds\n");
     }
 }
 
@@ -393,6 +421,81 @@ static inline void pruneNode(Node* node)
     }
 }
 
+void printNode(Node* node, size_t depth, size_t *number)
+{
+    char indentBuffer[50] = { 0 };
+    for (size_t i = 0; i < depth; ++i)
+    {
+        indentBuffer[i] = '>';
+    }
+
+    indentBuffer[depth] = ' ';
+
+    char *allChildNodesNull = "";
+    int noChildren = TRUE;
+    if (node != NULL) {
+        for (unsigned int i = 0; i < 8; ++i) {
+            if (node->children[i] != NO_CHILD)
+            {
+                noChildren = FALSE;
+                break;
+            }
+        }
+
+        if (noChildren) {
+            allChildNodesNull = " - No children";
+        }
+    }
+
+    *number = *number + 1;
+    printf("%s%p - %zu%s\n", indentBuffer, node, *number, allChildNodesNull);
+
+    if (!noChildren) {
+        for (unsigned int i = 0; i < 8; ++i) {
+            printNode(node->children[i], depth + 1, number);
+        }
+    }
+}
+
+void printTree(Octree* tree)
+{
+    if (tree->root == NULL)
+    {
+        return;
+    }
+
+    size_t number = 0;
+    printNode(tree->root, 0, &number);
+}
+
+size_t countNode(Node* node)
+{
+    if (node == NULL)
+    {
+        return 0;
+    }
+
+    size_t thisNodeTotal = 1;
+    for (unsigned int i = 0; i < 8; ++i) {
+        if (node->children[i] != NO_CHILD)
+        {
+            thisNodeTotal += countNode(node->children[i]);
+        }
+    }
+
+    return thisNodeTotal;
+}
+
+size_t treeSize(Octree* tree)
+{
+    if (tree->root == NULL)
+    {
+        return 0;
+    }
+
+    return countNode(tree->root);
+}
+
 void pruneTree(Octree* tree)
 {
     if (tree->root == NULL)
@@ -400,54 +503,68 @@ void pruneTree(Octree* tree)
         return;
     }
 
-    static Stack* preOrderStack = NULL;
     static Stack* postOrderStack = NULL;
 
-    if (preOrderStack == NULL)
+    if (postOrderStack == NULL)
     {
-        preOrderStack = Stack__init(sizeof(Node*), 10000);
-        postOrderStack = Stack__init(sizeof(Node*), 10000);
+        postOrderStack = Stack__init(sizeof(Node*), 50000);
     }
 
-    Stack__push(preOrderStack, &(tree->root));
-
-    while (!Stack__isEmpty(preOrderStack))
+    if (Stack__push(postOrderStack, &(tree->root)))
     {
-        Node* popped;
+        printf("Failed to push root element onto postOrderStack\n");
+    }
 
-        if (!Stack__pop(preOrderStack, &popped))
-        {
-            printf("Failed to pop element from preOrderStack\n");
+    Node* lastNode = NULL;
+
+    while (!Stack__isEmpty(postOrderStack)) {
+        //printf("Stack size: %d\n", Stack__size(postOrderStack));
+
+        Node *peeked = NULL;
+
+        if (Stack__peek(postOrderStack, &peeked)) {
+            printf("Failed to peek element from postOrderStack\n");
         }
 
-        if (!Stack__push(postOrderStack, &popped))
+        if (peeked == NULL)
         {
-            printf("Failed to push element onto postOrderStack\n");
+            printf("PEEKED IS NULL AFTER PEEK\n");
         }
 
-        for (unsigned int i = 0; i < 8; ++i)
+        // check if lastNode is a child of peeked and if peeked has any children
+        int lastNodeIsChild = FALSE;
+        int anyChildren = FALSE;
+        for (unsigned int i = 0; i < 8; ++i) {
+            if (lastNode != NULL && peeked->children[i] == lastNode) {
+                lastNodeIsChild = TRUE;
+            }
+
+            if (peeked->children[i] != NO_CHILD) {
+                anyChildren = TRUE;
+            }
+        }
+
+        // If current node has no children, or one child has been visited, then process and pop it
+        if (!anyChildren || lastNodeIsChild) {
+            pruneNode(peeked);
+
+            if (Stack__pop(postOrderStack)) {
+                printf("Failed to pop element from postOrderStack\n");
+            }
+
+            lastNode = peeked;
+        }
+        else // Otherwise, push the children onto the stack
         {
-            Node* child = popped->children[i];
-            if (child != NO_CHILD)
-            {
-                if (!Stack__push(preOrderStack, &(popped->children[i])))
-                {
-                    printf("Failed to push element onto preOrderStack\n");
+            for (int i = 7; i >= 0; --i) {
+                Node *child = peeked->children[i];
+                if (child != NO_CHILD) {
+                    if (Stack__push(postOrderStack, &(peeked->children[i]))) {
+                        printf("Failed to push element onto postOrderStack\n");
+                    }
                 }
             }
         }
-    }
-
-    while (!Stack__isEmpty(postOrderStack))
-    {
-        Node* popped;
-
-        if (!Stack__pop(postOrderStack, &popped))
-        {
-            printf("Failed to pop element from postOrderStack\n");
-        }
-
-        pruneNode(popped);
     }
 }
 
@@ -490,15 +607,19 @@ void createNodeCsv(Octree* tree, const char *filename)
     rootNodeDetails->centerZ = 0.0;
     rootNodeDetails->size = SIZE_LOOKUP_TABLE[0];
     rootNodeDetails->value = tree->root->logOdds;
-    Stack__push(treeDetailStack, &rootNodeDetails);
+
+    if (Stack__push(treeDetailStack, &rootNodeDetails))
+    {
+        printf("Failed to push root element onto treeDetailStack\n");
+    }
 
     while (!Stack__isEmpty(treeDetailStack))
     {
         NodeDetails *nodeDetails = NULL;
 
-        if (!Stack__pop(treeDetailStack, &nodeDetails))
+        if (Stack__peekAndPop(treeDetailStack, &nodeDetails))
         {
-            printf("Failed to pop element from postOrderStack\n");
+            printf("Failed to pop element from treeDetailStack\n");
         }
 
         fprintf(outFile, "depth,centerX,centerY,centerZ,size,value\n");
@@ -568,7 +689,7 @@ void createNodeCsv(Octree* tree, const char *filename)
                         printf("Unexpected childIndex: %zd\n", childIndex);
                 }
 
-                if (!Stack__push(treeDetailStack, &newNodeDetails))
+                if (Stack__push(treeDetailStack, &newNodeDetails))
                 {
                     printf("Failed to push element onto treeDetailStack\n");
                 }
@@ -592,7 +713,32 @@ void insertPointCloud(Octree* tree, Vector3d* points, size_t numPoints, Vector3d
                 points[i].x, points[i].y, points[i].z);
 
         ray_parameter(tree, &currentRay);
+
+        //printTree(tree);
+        //printf("Finished ray %zu. Press Any Key to Continue\n", i);
+        //getchar();
+
+        //pruneTree(tree);
+
+        //printTree(tree);
+        //printf("Pruned tree. Press Any Key to Continue\n", i);
+        //getchar();
+
+        //printf("Finished ray %zu\n", i);
     }
 
+    printf("Done inserting all rays, now pruning\n");
+
+    printf("tree size: %zu\n", treeSize(tree));
+    //printTree(tree);
+
+    printf("Press Any Key to Continue\n");
+    getchar();
+
     pruneTree(tree);
+
+    //printTree(tree);
+    printf("tree size: %zu\n", treeSize(tree));
+    printf("Press Any Key to Continue\n");
+    getchar();
 }

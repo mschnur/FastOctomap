@@ -8,7 +8,7 @@
 #include <stdlib.h>
 #include <string.h>
 
-Stack* Stack__init(size_t elementSize, size_t numElements)
+Stack* Stack__init(int elementSize, int numElements)
 {
     Stack *s = calloc(1, sizeof(Stack));
     s->topIndex = -1;
@@ -36,14 +36,14 @@ int Stack__isEmpty(const Stack* stack)
 
 int Stack__isFull(const Stack* stack)
 {
-    return stack->topIndex == stack->capacity - 1;
+    return stack->topIndex == (stack->capacity - 1);
 }
 
 int Stack__push(Stack* stack, void* element)
 {
     if (Stack__isFull(stack))
     {
-        return 1;
+        return -1;
     }
 
     stack->topIndex++;
@@ -56,7 +56,7 @@ int Stack__peek(const Stack* stack, void* peekedElement)
 {
     if (Stack__isEmpty(stack))
     {
-        return 1;
+        return -1;
     }
 
     void* source = ((uint8_t*) stack->data) + (stack->topIndex * stack->elementSize);
@@ -64,15 +64,26 @@ int Stack__peek(const Stack* stack, void* peekedElement)
     return 0;
 }
 
-int Stack__pop(Stack* stack, void* poppedElement)
+int Stack__peekAndPop(Stack* stack, void* poppedElement)
 {
     if (Stack__isEmpty(stack))
     {
-        return 1;
+        return -1;
     }
 
     void* source = ((uint8_t*) stack->data) + (stack->topIndex * stack->elementSize);
     memcpy(poppedElement, source, stack->elementSize);
+    stack->topIndex--;
+    return 0;
+}
+
+int Stack__pop(Stack* stack)
+{
+    if (Stack__isEmpty(stack))
+    {
+        return -1;
+    }
+
     stack->topIndex--;
     return 0;
 }
