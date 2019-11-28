@@ -40,9 +40,34 @@ void proc_subtree(double tx0, double ty0, double tz0,
     unsigned int currentNode = 0;
     unsigned char nodes = 0; //each bit represents a node
 
-
-    //is this error handling? can we assume this to always fail?
     if (tx1 < 0.0 || ty1 < 0.0 || tz1 < 0.0) {
+        return;
+    }
+
+    //if we are at max depth there wont be any children
+    if (depth == MAX_DEPTH) {
+        double logLikelihoodUpdate = 0.0;
+
+        if (is_greater(r->t_end, r->t_end, r->t_end, tx1, ty1, tz1))
+        {
+            // The ray endpoint does not occur in this subtree, but the ray passes through this subtree on its
+            // way to the endpoint, and we're at our maximum depth. Therefore we need to give this node a vote
+            // that it is free space.
+            logLikelihoodUpdate = PROB_MISS_LOG;
+        }
+        else
+        {
+            // The ray endpoint occurs within this subtree, and we're at our maximum depth. Therefore we need to
+            // give this node a vote that it is occupied.
+            logLikelihoodUpdate = PROB_HIT_LOG;
+        }
+
+        // Do the update
+        n->logOdds += logLikelihoodUpdate;
+
+        // Clamp the logOdds between the min/max
+        n->logOdds = fmax(CLAMPING_THRES_MIN, fmin(n->logOdds, CLAMPING_THRES_MAX));
+    
         return;
     }
 
@@ -84,7 +109,8 @@ void proc_subtree(double tx0, double ty0, double tz0,
         
 
         double t1,t2,t3;
-        unsigned int eq;
+        //need sign bit
+        int eq;
 
         eq = ~(((1u<<0) - currentNode)>>31);
         //this should compute if the currentNode is valid.
@@ -160,6 +186,7 @@ void proc_subtree(double tx0, double ty0, double tz0,
 
     }
 
+
     /******
      * Process all computed nodes
      ******/
@@ -212,33 +239,7 @@ void proc_subtree(double tx0, double ty0, double tz0,
         }
     }
 
-
-    if (depth == MAX_DEPTH) {
-        double logLikelihoodUpdate = 0.0;
-
-        if (is_greater(r->t_end, r->t_end, r->t_end, tx1, ty1, tz1))
-        {
-            // The ray endpoint does not occur in this subtree, but the ray passes through this subtree on its
-            // way to the endpoint, and we're at our maximum depth. Therefore we need to give this node a vote
-            // that it is free space.
-            logLikelihoodUpdate = PROB_MISS_LOG;
-        }
-        else
-        {
-            // The ray endpoint occurs within this subtree, and we're at our maximum depth. Therefore we need to
-            // give this node a vote that it is free space.
-            logLikelihoodUpdate = PROB_HIT_LOG;
-        }
-
-        // Do the update
-        n->logOdds += logLikelihoodUpdate;
-
-        // Clamp the logOdds between the min/max
-        n->logOdds = fmax(CLAMPING_THRES_MIN, fmin(n->logOdds, CLAMPING_THRES_MAX));
-    
-    }
-    else {
-        n->logOdds = maxChildLogLikelihood(n);
-    }
+    //this should only happen if call was recusive
+    n->logOdds = maxChildLogLikelihood(n);
 
 }
