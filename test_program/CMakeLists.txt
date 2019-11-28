@@ -5,6 +5,10 @@ if(NOT DEFINED OCTOMAP_DEPLOY_DIR)
 	message(FATAL_ERROR "OCTOMAP_DEPLOY_DIR must be defined")
 endif()
 
+if(NOT DEFINED FASTOCTREE_DEPLOY_DIR)
+	message(FATAL_ERROR "FASTOCTREE_DEPLOY_DIR must be defined")
+endif()
+
 if(NOT DEFINED TEST_EXECUTABLE_NAME)
 	message(FATAL_ERROR "TEST_EXECUTABLE_NAME must be defined")
 endif()
@@ -19,10 +23,15 @@ find_package(octomap REQUIRED PATHS ${OCTOMAP_DEPLOY_DIR} NO_DEFAULT_PATH)
 
 add_executable(${TEST_EXECUTABLE_NAME} test_main.cpp)
 
-target_include_directories(${TEST_EXECUTABLE_NAME} PUBLIC ${OCTOMAP_INCLUDE_DIRS})
+target_include_directories(${TEST_EXECUTABLE_NAME} 
+	PUBLIC ${OCTOMAP_INCLUDE_DIRS}
+	PUBLIC ${FASTOCTREE_DEPLOY_DIR}/include
+	)
+
 target_link_libraries(${TEST_EXECUTABLE_NAME} 
 	PUBLIC ${OCTOMAP_DEPLOY_DIR}/lib/liboctomap.a
     PUBLIC ${OCTOMAP_DEPLOY_DIR}/lib/liboctomath.a
+    PUBLIC ${FASTOCTREE_DEPLOY_DIR}/lib/libFastOctree.a
 	)
 
 set_target_properties(${TEST_EXECUTABLE_NAME} PROPERTIES

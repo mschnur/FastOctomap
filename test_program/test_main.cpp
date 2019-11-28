@@ -7,6 +7,8 @@
 #include <sstream>
 #include <ios>
 
+#include "FastOctree.h"
+
 void printUsage(const char* self)
 {
     std::cerr << "\nUSAGE: " << self << " <InputFile>.log/graph\n\n";
@@ -44,7 +46,10 @@ int main(int argc, char** argv)
     std::cout << "\nConstructing OcTree object\n===========================\n";
     std::unique_ptr<octomap::OcTree> tree(new octomap::OcTree(0.05));
     tree->expand();
-    
+
+    std::cout << "\nConstructing FastOctree object\n===========================\n";
+    Octree fastOctree = {};
+    initOctree(&fastOctree);
 
     std::cout << "\nAdding Point Clouds\n===========================\n";
 
@@ -57,7 +62,8 @@ int main(int argc, char** argv)
         gettimeofday(&stop, NULL);  // start time
 		
 		std::stringstream filenameStream;
-		filenameStream << "octomap_leaf_nodes_after_pointcloud_" << currentScan << ".csv";
+		filenameStream << "octomap_nodes_after_pointcloud_" << currentScan << ".csv";
+
 		{
 			std::ofstream outFile(filenameStream.str(), std::ios::trunc);
 			outFile << "depth,centerX,centerY,centerZ,size,value" << std::endl;
@@ -69,6 +75,28 @@ int main(int argc, char** argv)
 				        << it.getSize() << "," << it->getValue() << std::endl;
 			}
 		}
+
+		{
+			static Vector3d pointsBuffer[300000] = {};
+			size_t numPoints = (*scan_it)->scan->size();
+			for (size_t i = 0; i < numPoints; ++i)
+			{
+				const octomap::point3d& pt = (*scan_it)->scan->getPoint(i);
+				initVector3d(&(pointsBuffer[i]), pt.x(), pt.y(), pt.z());
+			}
+
+			Vector3d sensorOrigin = {};
+			const octomap::point3d& sensorOriginOctomap = (*scan_it)->pose.trans();
+			initVector3d(&sensorOrigin, sensorOriginOctomap.x(), sensorOriginOctomap.y(), sensorOriginOctomap.z());
+
+			insertPointCloud(&fastOctree, pointsBuffer, numPoints, &sensorOrigin);
+
+			std::stringstream fastOctreeFilenameStream;
+			fastOctreeFilenameStream << "FastOctree_nodes_after_pointcloud_" << currentScan << ".csv";
+
+			createNodeCsv(&fastOctree, fastOctreeFilenameStream.str().c_str());
+		}
+		
        
         double time_to_insert = (stop.tv_sec - start.tv_sec) + 1.0e-6 *(stop.tv_usec - start.tv_usec);
 	    //std::cout << "Scan #: " << currentScan << std::endl

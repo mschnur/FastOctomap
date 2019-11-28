@@ -8,10 +8,8 @@
 #include <stdlib.h>
 #include <string.h>
 
-#include <pthread.h>
-
 #include "FastOctree.h"
-#include "NodeStack.h"
+#include "Stack.h"
 
 #define MAX(x,y) (((x) > (y)) ? (x) : (y))
 #define MIN(x,y) (((x) < (y)) ? (x) : (y))
@@ -19,13 +17,10 @@
 #define TRUE 1
 #define FALSE 0
 
-#define RESOLUTION 0.05
-#define MAX_DEPTH 16u
-
 const Node* const NO_CHILD = NULL;
 
 const Node* const NO_CHILDREN[8] = {
-        NO_CHILD, NO_CHILD, NO_CHILD, NO_CHILD, NO_CHILD, NO_CHILD, NO_CHILD, NO_CHILD
+        NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL
 };
 
 const double CLAMPING_THRES_MIN = -2.0;
@@ -58,12 +53,12 @@ const double SIZE_LOOKUP_TABLE[MAX_DEPTH + 1] = {
 // Utility functions
 //###########################################################################################
 
-inline int nodeHasAnyChildren(const Node* n)
+static inline int nodeHasAnyChildren(const Node* n)
 {
     return (memcmp(n->children, NO_CHILDREN, 8 * sizeof(Node*)) != 0);
 }
 
-inline int nodeIsPrunable(const Node* n)
+static inline int nodeIsPrunable(const Node* n)
 {
     // If all of this node's children have the same log-likelihood and have no children themselves, then we can
     // prune these children, meaning we delete them.
@@ -79,14 +74,14 @@ inline int nodeIsPrunable(const Node* n)
     return TRUE;
 }
 
-inline void deleteChild(Node* n, unsigned int childIndex)
+static inline void deleteChild(Node* n, unsigned int childIndex)
 {
     free(n->children[childIndex]);
     n->children[childIndex] = NULL;
 }
 
 
-inline void deleteAllChildren(Node* n)
+static inline void deleteAllChildren(Node* n)
 {
     for (unsigned int i = 0; i < 8; ++i)
     {
@@ -94,7 +89,7 @@ inline void deleteAllChildren(Node* n)
     }
 }
 
-inline void createChild(Node* n, unsigned int childIndex)
+static inline void createChild(Node* n, unsigned int childIndex)
 {
     // In order for us to be able to free the nodes individually (which may happen during pruning) we need to
     // allocate each node separately, instead of the whole array at once. Using calloc instead of malloc
@@ -106,7 +101,7 @@ inline void createChild(Node* n, unsigned int childIndex)
     n->children[childIndex]->logOdds = n->logOdds;
 }
 
-inline void createChildIfItDoesntExist(Node* n, unsigned int childIndex)
+static inline void createChildIfItDoesntExist(Node* n, unsigned int childIndex)
 {
     if (n->children[childIndex] == NO_CHILD)
     {
@@ -114,7 +109,7 @@ inline void createChildIfItDoesntExist(Node* n, unsigned int childIndex)
     }
 }
 
-inline double maxChildLogLikelihood(const Node* n)
+static inline double maxChildLogLikelihood(const Node* n)
 {
     double maxLogLikelihood = -INFINITY;
     for (unsigned int i = 0; i < 8; ++i)
@@ -129,7 +124,7 @@ inline double maxChildLogLikelihood(const Node* n)
     return maxLogLikelihood;
 }
 
-inline void expandNode(Node* n)
+static inline void expandNode(Node* n)
 {
     assert(!nodeHasAnyChildren(n));
 
@@ -139,19 +134,19 @@ inline void expandNode(Node* n)
     }
 }
 
-inline int is_less(double pointX, double pointY, double pointZ,
+static inline int is_less(double pointX, double pointY, double pointZ,
                    double minX, double minY, double minZ)
 {
     return (minX > pointX && minY > pointY && minZ > pointZ);
 }
 
-inline int is_greater(double pointX, double pointY, double pointZ,
+static inline int is_greater(double pointX, double pointY, double pointZ,
                       double maxX, double maxY, double maxZ)
 {
     return (pointX > maxX && pointY > maxY && pointZ > maxZ);
 }
 
-inline int is_between(double minX, double minY, double minZ,
+static inline int is_between(double minX, double minY, double minZ,
                       double pointX, double pointY, double pointZ,
                       double maxX, double maxY, double maxZ)
 {
@@ -160,7 +155,7 @@ inline int is_between(double minX, double minY, double minZ,
             minZ <= pointZ && pointZ <= maxZ);
 }
 
-inline int is_between_vector3d(const Vector3d* min,
+static inline int is_between_vector3d(const Vector3d* min,
                                const Vector3d* point,
                                const Vector3d* max)
 {
@@ -222,7 +217,7 @@ void proc_subtree(double tx0, double ty0, double tz0,
                   unsigned int depth,
                   Node* n, unsigned char a, Ray* r)
 {
-    printf("proc_subtree\n");
+    //printf("proc_subtree, depth=%u\n", depth);
     double txm, tym, tzm;
     int currentNode;
 
@@ -262,6 +257,8 @@ void proc_subtree(double tx0, double ty0, double tz0,
 
             // Clamp the logOdds between the min/max
             n->logOdds = fmax(CLAMPING_THRES_MIN, fmin(n->logOdds, CLAMPING_THRES_MAX));
+
+            return;
         }
         else
         {
@@ -346,7 +343,7 @@ void ray_parameter(Octree* tree, Ray* r) {
         tree->root = (Node*) calloc(1, sizeof(Node));
     }
 
-    printf("ray_parameter\n");
+    //printf("ray_parameter\n");
     unsigned char a = 0;
 
     if (r->direction.x < 0.0f) {
@@ -379,8 +376,8 @@ void ray_parameter(Octree* tree, Ray* r) {
     double tz0 = (tree->min.z - r->origin.z) * rdzInverse;
     double tz1 = (tree->max.z - r->origin.z) * rdzInverse;
 
-    printf("txyz0: %lf %lf %lf\n", tx0, ty0, tz0);
-    printf("txyz1: %lf %lf %lf\n", tx1, ty1, tz1);
+    //printf("txyz0: %lf %lf %lf\n", tx0, ty0, tz0);
+    //printf("txyz1: %lf %lf %lf\n", tx1, ty1, tz1);
 
     if (MAX(MAX(tx0, ty0), tz0) < MIN(MIN(tx1, ty1), tz1))
     {
@@ -388,7 +385,7 @@ void ray_parameter(Octree* tree, Ray* r) {
     }
 }
 
-inline void pruneNode(Node* node)
+static inline void pruneNode(Node* node)
 {
     if (nodeIsPrunable(node))
     {
@@ -403,24 +400,27 @@ void pruneTree(Octree* tree)
         return;
     }
 
-    static NodeStack preOrderStack = { 0 };
-    static NodeStack postOrderStack = { 0 };
+    static Stack* preOrderStack = NULL;
+    static Stack* postOrderStack = NULL;
 
-    init(&preOrderStack);
-    init(&postOrderStack);
+    if (preOrderStack == NULL)
+    {
+        preOrderStack = Stack__init(sizeof(Node*), 10000);
+        postOrderStack = Stack__init(sizeof(Node*), 10000);
+    }
 
-    push(&preOrderStack, tree->root);
+    Stack__push(preOrderStack, &(tree->root));
 
-    while (!isEmpty(&preOrderStack))
+    while (!Stack__isEmpty(preOrderStack))
     {
         Node* popped;
 
-        if (!pop(&preOrderStack, &popped))
+        if (!Stack__pop(preOrderStack, &popped))
         {
             printf("Failed to pop element from preOrderStack\n");
         }
 
-        if (!push(&postOrderStack, popped))
+        if (!Stack__push(postOrderStack, &popped))
         {
             printf("Failed to push element onto postOrderStack\n");
         }
@@ -430,7 +430,7 @@ void pruneTree(Octree* tree)
             Node* child = popped->children[i];
             if (child != NO_CHILD)
             {
-                if (!push(&preOrderStack, popped->children[i]))
+                if (!Stack__push(preOrderStack, &(popped->children[i])))
                 {
                     printf("Failed to push element onto preOrderStack\n");
                 }
@@ -438,11 +438,11 @@ void pruneTree(Octree* tree)
         }
     }
 
-    while (!isEmpty(&postOrderStack))
+    while (!Stack__isEmpty(postOrderStack))
     {
         Node* popped;
 
-        if (!pop(&postOrderStack, &popped))
+        if (!Stack__pop(postOrderStack, &popped))
         {
             printf("Failed to pop element from postOrderStack\n");
         }
@@ -451,62 +451,148 @@ void pruneTree(Octree* tree)
     }
 }
 
-void createNodeCsv(Octree* tree)
+typedef struct NodeDetails
+{
+    Node* node;
+    unsigned int depth;
+    double centerX, centerY, centerZ, size, value;
+} NodeDetails;
+
+void createNodeCsv(Octree* tree, const char *filename)
 {
     if (tree->root == NULL)
     {
+        printf("Cannot create node CSV named %s because tree root is NULL\n", filename);
         return;
     }
 
-    static NodeStack preOrderStack = { 0 };
-    static NodeStack postOrderStack = { 0 };
+    static Stack* treeDetailStack = NULL;
 
-    init(&preOrderStack);
-    init(&postOrderStack);
-
-    push(&preOrderStack, tree->root);
-
-    while (!isEmpty(&preOrderStack))
+    if (treeDetailStack == NULL)
     {
-        Node* popped;
-
-        if (!pop(&preOrderStack, &popped))
-        {
-            printf("Failed to pop element from preOrderStack\n");
-        }
-
-        if (!push(&postOrderStack, popped))
-        {
-            printf("Failed to push element onto postOrderStack\n");
-        }
-
-        for (unsigned int i = 0; i < 8; ++i)
-        {
-            Node* child = popped->children[i];
-            if (child != NO_CHILD)
-            {
-                if (!push(&preOrderStack, popped->children[i]))
-                {
-                    printf("Failed to push element onto preOrderStack\n");
-                }
-            }
-        }
+        treeDetailStack = Stack__init(sizeof(NodeDetails*), 10000);
     }
 
-    while (!isEmpty(&postOrderStack))
+    FILE *outFile = fopen(filename, "w");
+    if (outFile == NULL)
     {
-        Node* popped;
+        printf("Failed to open file named %s\n", filename);
+        return;
+    }
 
-        if (!pop(&postOrderStack, &popped))
+    fprintf(outFile, "depth,centerX,centerY,centerZ,size,value\n");
+
+    NodeDetails *rootNodeDetails = calloc(1, sizeof(NodeDetails));
+    rootNodeDetails->node = tree->root;
+    rootNodeDetails->depth = 0;
+    rootNodeDetails->centerX = 0.0;
+    rootNodeDetails->centerY = 0.0;
+    rootNodeDetails->centerZ = 0.0;
+    rootNodeDetails->size = SIZE_LOOKUP_TABLE[0];
+    rootNodeDetails->value = tree->root->logOdds;
+    Stack__push(treeDetailStack, &rootNodeDetails);
+
+    while (!Stack__isEmpty(treeDetailStack))
+    {
+        NodeDetails *nodeDetails = NULL;
+
+        if (!Stack__pop(treeDetailStack, &nodeDetails))
         {
             printf("Failed to pop element from postOrderStack\n");
         }
 
-        pruneNode(popped);
+        fprintf(outFile, "depth,centerX,centerY,centerZ,size,value\n");
+        fprintf(outFile, "%u,%lf,%lf,%lf,%lf,%lf\n",
+                nodeDetails->depth, nodeDetails->centerX, nodeDetails->centerY, nodeDetails->centerZ,
+                nodeDetails->size, nodeDetails->value);
+
+        for (ssize_t childIndex = 7; childIndex >= 0; --childIndex) {
+            if (nodeDetails->node->children[childIndex] != NO_CHILD) {
+                NodeDetails *newNodeDetails = calloc(1, sizeof(NodeDetails));
+                newNodeDetails->node = nodeDetails->node->children[childIndex];
+                newNodeDetails->depth = nodeDetails->depth + 1;
+                newNodeDetails->size = SIZE_LOOKUP_TABLE[newNodeDetails->depth];
+                newNodeDetails->value = nodeDetails->node->logOdds;
+                double newNodeHalfSize = newNodeDetails->size / 2.0;
+
+                switch (childIndex) {
+                    case 0:
+                        newNodeDetails->centerX = nodeDetails->centerX - newNodeHalfSize;
+                        newNodeDetails->centerY = nodeDetails->centerY - newNodeHalfSize;
+                        newNodeDetails->centerZ = nodeDetails->centerZ - newNodeHalfSize;
+                        break;
+
+                    case 1:
+                        newNodeDetails->centerX = nodeDetails->centerX - newNodeHalfSize;
+                        newNodeDetails->centerY = nodeDetails->centerY - newNodeHalfSize;
+                        newNodeDetails->centerZ = nodeDetails->centerZ + newNodeHalfSize;
+                        break;
+
+                    case 2:
+                        newNodeDetails->centerX = nodeDetails->centerX - newNodeHalfSize;
+                        newNodeDetails->centerY = nodeDetails->centerY + newNodeHalfSize;
+                        newNodeDetails->centerZ = nodeDetails->centerZ - newNodeHalfSize;
+                        break;
+
+                    case 3:
+                        newNodeDetails->centerX = nodeDetails->centerX - newNodeHalfSize;
+                        newNodeDetails->centerY = nodeDetails->centerY + newNodeHalfSize;
+                        newNodeDetails->centerZ = nodeDetails->centerZ + newNodeHalfSize;
+                        break;
+
+                    case 4:
+                        newNodeDetails->centerX = nodeDetails->centerX + newNodeHalfSize;
+                        newNodeDetails->centerY = nodeDetails->centerY - newNodeHalfSize;
+                        newNodeDetails->centerZ = nodeDetails->centerZ - newNodeHalfSize;
+                        break;
+
+                    case 5:
+                        newNodeDetails->centerX = nodeDetails->centerX + newNodeHalfSize;
+                        newNodeDetails->centerY = nodeDetails->centerY - newNodeHalfSize;
+                        newNodeDetails->centerZ = nodeDetails->centerZ + newNodeHalfSize;
+                        break;
+
+                    case 6:
+                        newNodeDetails->centerX = nodeDetails->centerX + newNodeHalfSize;
+                        newNodeDetails->centerY = nodeDetails->centerY + newNodeHalfSize;
+                        newNodeDetails->centerZ = nodeDetails->centerZ - newNodeHalfSize;
+                        break;
+
+                    case 7:
+                        newNodeDetails->centerX = nodeDetails->centerX + newNodeHalfSize;
+                        newNodeDetails->centerY = nodeDetails->centerY + newNodeHalfSize;
+                        newNodeDetails->centerZ = nodeDetails->centerZ + newNodeHalfSize;
+                        break;
+
+                    default:
+                        printf("Unexpected childIndex: %zd\n", childIndex);
+                }
+
+                if (!Stack__push(treeDetailStack, &newNodeDetails))
+                {
+                    printf("Failed to push element onto treeDetailStack\n");
+                }
+            }
+        }
+
+        free(nodeDetails);
     }
+
+    fclose(outFile);
 }
 
-void insertPointCloud(Octree* tree, Vector3d* points, size_t numPoints)
+void insertPointCloud(Octree* tree, Vector3d* points, size_t numPoints, Vector3d* sensorOrigin)
 {
     // for each point, create ray and call ray_parameter. After all points done, prune the tree
+    for (size_t i = 0; i < numPoints; ++i)
+    {
+        Ray currentRay;
+        initRay(&currentRay,
+                sensorOrigin->x, sensorOrigin->y, sensorOrigin->z,
+                points[i].x, points[i].y, points[i].z);
+
+        ray_parameter(tree, &currentRay);
+    }
+
+    pruneTree(tree);
 }
