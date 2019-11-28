@@ -73,4 +73,4 @@ with_terminal_logic.c
 - as one previous, but re-adding the terminal logic (with some adjustments)
 
 with_terminal_logic_converted.c
-- as one previous, but converting the conditional logic 
+- as one previous, but converting the conditional logic (also removed if statements around next_node)

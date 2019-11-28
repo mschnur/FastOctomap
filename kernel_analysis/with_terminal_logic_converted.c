@@ -41,6 +41,7 @@ void proc_subtree(double tx0, double ty0, double tz0,
     unsigned char nodes = 0; //each bit represents a node
 
 
+    //is this error handling? can we assume this to always fail?
     if (tx1 < 0.0 || ty1 < 0.0 || tz1 < 0.0) {
         return;
     }
@@ -82,85 +83,80 @@ void proc_subtree(double tx0, double ty0, double tz0,
         currentNode |= 1u<<currentNode;
         
 
-        if(currentNode == (1u<<0)) {
-            //this should compute if the currentNode is valid.
-            double t1 = r->t_endx - tx0;
-            double t2 = r->t_endy - ty0;
-            double t3 = r->t_endz - tz0;
+        double t1,t2,t3;
+        unsigned int eq;
 
-            unsigned long long valid_node = (unsigned long long)(*((unsigned long long*)(&t1)) & *((unsigned long long*)(&t2)) & *((unsigned long long*)(&t3)) & 0x8000000000000000)>>63;
-            nodes |= currentNode & valid_node;
-            currentNode = new_node(txm, 4, tym, 2, tzm, 1);
-        }
+        eq = ~(((1u<<0) - currentNode)>>31);
+        //this should compute if the currentNode is valid.
+        t1 = r->t_endx - tx0;
+        t2 = r->t_endy - ty0;
+        t3 = r->t_endz - tz0;
 
-        if(currentNode == (1u<<1)) {
-            double t1 = tx0 - r->t_endx;
-            double t2 = ty0 - r->t_endy;
-            double t3 = tzm - r->t_endz;
+        unsigned long long valid_node = (unsigned long long)(*((unsigned long long*)(&t1)) & *((unsigned long long*)(&t2)) & *((unsigned long long*)(&t3)) & 0x8000000000000000)>>63;
+        nodes |= currentNode & valid_node & eq;
+        currentNode = (new_node(txm, 4, tym, 2, tzm, 1) & eq) | (currentNode & ~eq);
 
-            unsigned long long valid_node = (unsigned long long)(*((unsigned long long*)(&t1)) & *((unsigned long long*)(&t2)) & *((unsigned long long*)(&t3)) & 0x8000000000000000)>>63;
-            nodes |= currentNode & valid_node;
-            currentNode = new_node(txm, 5, tym, 3, tz1, 8);
-        }
+        eq = ~(((1u<<1) - currentNode)>>31);
+        t1 = tx0 - r->t_endx;
+        t2 = ty0 - r->t_endy;
+        t3 = tzm - r->t_endz;
 
-        if(currentNode == (1u<<2)) {
-            double t1 = tx0 - r->t_endx;
-            double t2 = tym - r->t_endy;
-            double t3 = tz0 - r->t_endz;
+        unsigned long long valid_node = (unsigned long long)(*((unsigned long long*)(&t1)) & *((unsigned long long*)(&t2)) & *((unsigned long long*)(&t3)) & 0x8000000000000000)>>63;
+        nodes |= currentNode & valid_node & eq;
+        currentNode = (new_node(txm, 5, tym, 3, tz1, 8) & eq) | (currentNode & ~eq);
 
-            unsigned long long valid_node = (unsigned long long)(*((unsigned long long*)(&t1)) & *((unsigned long long*)(&t2)) & *((unsigned long long*)(&t3)) & 0x8000000000000000)>>63;
-            nodes |= currentNode & valid_node;
-            currentNode = new_node(txm, 6, ty1, 8, tzm, 3);
-        }
+        eq = ~(((1u<<2) - currentNode)>>31);
+        t1 = tx0 - r->t_endx;
+        t2 = tym - r->t_endy;
+        t3 = tz0 - r->t_endz;
 
-        if(currentNode == (1u<<3)) {
-            double t1 = tx0 - r->t_endx;
-            double t2 = tym - r->t_endy;
-            double t3 = tzm - r->t_endz;
+        unsigned long long valid_node = (unsigned long long)(*((unsigned long long*)(&t1)) & *((unsigned long long*)(&t2)) & *((unsigned long long*)(&t3)) & 0x8000000000000000)>>63;
+        nodes |= currentNode & valid_node & eq;
+        currentNode = (new_node(txm, 6, ty1, 8, tzm, 3) & eq) | (currentNode & ~eq);
 
-            unsigned long long valid_node = (unsigned long long)(*((unsigned long long*)(&t1)) & *((unsigned long long*)(&t2)) & *((unsigned long long*)(&t3)) & 0x8000000000000000)>>63;
-            nodes |= currentNode & valid_node;
-            currentNode = new_node(txm, 7, ty1, 8, tz1, 8);
-        }
+        eq = ~(((1u<<3) - currentNode)>>31);
+        t1 = tx0 - r->t_endx;
+        t2 = tym - r->t_endy;
+        t3 = tzm - r->t_endz;
 
-        if(currentNode == (1u<<4)) {
-            double t1 = txm - r->t_endx;
-            double t2 = ty0 - r->t_endy;
-            double t3 = tz0 - r->t_endz;
+        unsigned long long valid_node = (unsigned long long)(*((unsigned long long*)(&t1)) & *((unsigned long long*)(&t2)) & *((unsigned long long*)(&t3)) & 0x8000000000000000)>>63;
+        nodes |= currentNode & valid_node & eq;
+        currentNode = (new_node(txm, 7, ty1, 8, tz1, 8) & eq) | (currentNode & ~eq);
 
-            unsigned long long valid_node = (unsigned long long)(*((unsigned long long*)(&t1)) & *((unsigned long long*)(&t2)) & *((unsigned long long*)(&t3)) & 0x8000000000000000)>>63;
-            nodes |= currentNode & valid_node;
-            currentNode = new_node(tx1, 8, tym, 6, tzm, 5);
-        }
+        eq = ~(((1u<<4) - currentNode)>>31);
+        t1 = txm - r->t_endx;
+        t2 = ty0 - r->t_endy;
+        t3 = tz0 - r->t_endz;
 
-        if(currentNode == (1u<<5)) {
-            double t1 = txm - r->t_endx;
-            double t2 = ty0 - r->t_endy;
-            double t3 = tzm - r->t_endz;
+        unsigned long long valid_node = (unsigned long long)(*((unsigned long long*)(&t1)) & *((unsigned long long*)(&t2)) & *((unsigned long long*)(&t3)) & 0x8000000000000000)>>63;
+        nodes |= currentNode & valid_node & eq;
+        currentNode = (new_node(tx1, 8, tym, 6, tzm, 5) & eq) | (currentNode & ~eq);
 
-            unsigned long long valid_node = (unsigned long long)(*((unsigned long long*)(&t1)) & *((unsigned long long*)(&t2)) & *((unsigned long long*)(&t3)) & 0x8000000000000000)>>63;
-            nodes |= currentNode & valid_node;
-            currentNode = new_node(tx1, 8, tym, 7, tz1, 8);
-        }
+        eq = ~(((1u<<5) - currentNode)>>31);
+        t1 = txm - r->t_endx;
+        t2 = ty0 - r->t_endy;
+        t3 = tzm - r->t_endz;
 
-        if(currentNode == (1u<<6)) {
-            double t1 = txm - r->t_endx;
-            double t2 = tym - r->t_endy;
-            double t3 = tz0 - r->t_endz;
+        unsigned long long valid_node = (unsigned long long)(*((unsigned long long*)(&t1)) & *((unsigned long long*)(&t2)) & *((unsigned long long*)(&t3)) & 0x8000000000000000)>>63;
+        nodes |= currentNode & valid_node & eq;
+        currentNode = (new_node(tx1, 8, tym, 7, tz1, 8) & eq) | (currentNode & ~eq);
 
-            unsigned long long valid_node = (unsigned long long)(*((unsigned long long*)(&t1)) & *((unsigned long long*)(&t2)) & *((unsigned long long*)(&t3)) & 0x8000000000000000)>>63;
-            nodes |= currentNode & valid_node;
-            currentNode = new_node(tx1, 8, ty1, 8, tzm, 7);
-        }
+        eq = ~(((1u<<6) - currentNode)>>31);
+        t1 = txm - r->t_endx;
+        t2 = tym - r->t_endy;
+        t3 = tz0 - r->t_endz;
 
-        if(currentNode == (1u<<7)){
-            double t1 = txm - r->t_endx;
-            double t2 = tym - r->t_endy;
-            double t3 = tzm - r->t_endz;
+        unsigned long long valid_node = (unsigned long long)(*((unsigned long long*)(&t1)) & *((unsigned long long*)(&t2)) & *((unsigned long long*)(&t3)) & 0x8000000000000000)>>63;
+        nodes |= currentNode & valid_node & eq;
+        currentNode = (new_node(tx1, 8, ty1, 8, tzm, 7) & eq) | (currentNode & ~eq);
 
-            unsigned long long valid_node = (unsigned long long)(*((unsigned long long*)(&t1)) & *((unsigned long long*)(&t2)) & *((unsigned long long*)(&t3)) & 0x8000000000000000)>>63;
-            nodes |= currentNode & valid_node;
-        }
+        eq = ~(((1u<<7) - currentNode)>>31);
+        t1 = txm - r->t_endx;
+        t2 = tym - r->t_endy;
+        t3 = tzm - r->t_endz;
+
+        unsigned long long valid_node = (unsigned long long)(*((unsigned long long*)(&t1)) & *((unsigned long long*)(&t2)) & *((unsigned long long*)(&t3)) & 0x8000000000000000)>>63;
+        nodes |= currentNode & valid_node & eq;
 
     }
 
