@@ -68,6 +68,10 @@ unsigned int new_node_one(double txm, double tym, double tzm, unsigned char x, u
 unsigned int new_node_two(double txm, double tym, double tzm, unsigned char x, unsigned char y, unsigned char z) {
     unsigned long long currentNode = 0;
 
+    // txm = 0.45;
+    // tym = 0.55;
+    // tzm = 0.175;
+
     double tmp1 = txm - tym;
     double tmp2 = txm - tzm;
     double tmp3 = tym - tzm;
@@ -79,7 +83,7 @@ unsigned int new_node_two(double txm, double tym, double tzm, unsigned char x, u
     currentNode |= (unsigned long long)(~*((unsigned long long*)(&tmp1)) & *((unsigned long long*)(&tmp3)) & 0x8000000000000000)>>(63-y);
     
     //Z
-    currentNode |= (unsigned long long)(~*((unsigned long long*)(&tmp1)) & ~*((unsigned long long*)(&tmp3)) & 0x8000000000000000)>>(63-z);
+    currentNode |= (unsigned long long)( ~*(unsigned long long*)(&tmp3) & ~*(unsigned long long*)(&tmp2) & 0x8000000000000000 )>>(63-z);
 
     return (unsigned int)currentNode;
 }
@@ -210,9 +214,9 @@ int main(){
         }
 
         {
-            txm = 0.0;
-            tym = 0.0;
-            tzm = 0.0;
+            txm = 0.45;
+            tym = 0.55;
+            tzm = 0.175;
 
             answer1 = new_node_one(txm,tym,tzm,1,2,3);
             answer2 = new_node_two(txm,tym,tzm,1,2,3);

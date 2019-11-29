@@ -24,19 +24,19 @@ typedef struct Ray {
 #include "with_terminal_logic_converted.c"
 
 int main(){
-    double tx0 = 0.0;
-    double ty0 = 0.0;
-    double tz0 = 0.0;
-    double tx1 = 1.0;
-    double ty1 = 1.0;
-    double tz1 = 1.0;
+    double tx0 = 0.1;//0.0;
+    double ty0 = 0.1;//0.0;
+    double tz0 = 0.1;//0.0;
+    double tx1 = 0.8;//1.0;
+    double ty1 = 1.0;//1.0;
+    double tz1 = 0.25;//1.0;
 
 
     Ray r = {
         {0,0,0},
         {0,0,0},
         {0,0,0},
-        0.25
+        0.9
     };
 
     proc_subtree(tx0,ty0,tz0,tx1,ty1,tz1,0,NULL,0,&r);

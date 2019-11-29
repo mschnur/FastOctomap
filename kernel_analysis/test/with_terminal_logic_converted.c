@@ -15,6 +15,8 @@ inline int is_greater(double pointX, double pointY, double pointZ,
 
 int new_node(double txm, unsigned char x, double tym, unsigned char y, double tzm, unsigned char z)
 {
+    // printf("txm: %f; tym: %f; tzm: %f\n", txm,tym,tzm);
+    
     unsigned long long currentNode = 0;
 
     double tmp1 = txm - tym;
@@ -28,7 +30,7 @@ int new_node(double txm, unsigned char x, double tym, unsigned char y, double tz
     currentNode |= (unsigned long long)(~*((unsigned long long*)(&tmp1)) & *((unsigned long long*)(&tmp3)) & 0x8000000000000000)>>(63-y);
     
     //Z
-    currentNode |= (unsigned long long)(~*((unsigned long long*)(&tmp1)) & ~*((unsigned long long*)(&tmp3)) & 0x8000000000000000)>>(63-z);
+    currentNode |= (unsigned long long)( ~*(unsigned long long*)(&tmp3) & ~*(unsigned long long*)(&tmp2) & 0x8000000000000000 )>>(63-z);
 
     return (unsigned int)currentNode;
 }
@@ -40,12 +42,12 @@ void proc_subtree(double tx0, double ty0, double tz0,
                   Node* n, unsigned char a, Ray* r) {
     printf("proc_subtree\n");
     double txm, tym, tzm;
-    unsigned int currentNode = 0;
+    int currentNode = 0;
     unsigned char nodes = 0; //each bit represents a node
 
     double t1,t2,t3;
     int eq;
-    unsigned long long valid_node;
+    long long valid_node;
 
 
     if (tx1 < 0.0 || ty1 < 0.0 || tz1 < 0.0) {
@@ -114,69 +116,78 @@ void proc_subtree(double tx0, double ty0, double tz0,
 
 
         currentNode |= 1u<<currentNode;
+        // printf("cur: %d\n", currentNode);
 
         eq = ~(((1<<0) - currentNode)>>31);
         //this should compute if the currentNode is valid.
         t1 = tx0 - r->t_end;
         t2 = ty0 - r->t_end;
         t3 = tz0 - r->t_end;
-        valid_node = (unsigned long long)(*((unsigned long long*)(&t1)) & *((unsigned long long*)(&t2)) & *((unsigned long long*)(&t3)) & 0x8000000000000000)>>63;
+        valid_node = (long long)(*((unsigned long long*)(&t1)) & *((unsigned long long*)(&t2)) & *((unsigned long long*)(&t3)) & 0x8000000000000000)>>63;
         nodes |= currentNode & valid_node & eq;
-        currentNode = (new_node(txm, 4, tym, 2, tzm, 1) & eq) | (currentNode & ~eq);
+        // printf("eq: %x\n", eq);
+        currentNode = new_node(txm, 4, tym, 2, tzm, 1);//(new_node(txm, 4, tym, 2, tzm, 1) & eq) | (currentNode & ~eq);
+        // printf("cur: %d\n", currentNode);
 
         eq = ~(((1<<1) - currentNode)>>31);
         t1 = tx0 - r->t_end;
         t2 = ty0 - r->t_end;
         t3 = tzm - r->t_end;
-        valid_node = (unsigned long long)(*((unsigned long long*)(&t1)) & *((unsigned long long*)(&t2)) & *((unsigned long long*)(&t3)) & 0x8000000000000000)>>63;
+        valid_node = (long long)(*((unsigned long long*)(&t1)) & *((unsigned long long*)(&t2)) & *((unsigned long long*)(&t3)) & 0x8000000000000000)>>63;
         nodes |= currentNode & valid_node & eq;
         currentNode = (new_node(txm, 5, tym, 3, tz1, 8) & eq) | (currentNode & ~eq);
+        // printf("cur: %d\n", currentNode);
 
         eq = ~(((1<<2) - currentNode)>>31);
         t1 = tx0 - r->t_end;
         t2 = tym - r->t_end;
         t3 = tz0 - r->t_end;
-        valid_node = (unsigned long long)(*((unsigned long long*)(&t1)) & *((unsigned long long*)(&t2)) & *((unsigned long long*)(&t3)) & 0x8000000000000000)>>63;
+        valid_node = (long long)(*((unsigned long long*)(&t1)) & *((unsigned long long*)(&t2)) & *((unsigned long long*)(&t3)) & 0x8000000000000000)>>63;
         nodes |= currentNode & valid_node & eq;
         currentNode = (new_node(txm, 6, ty1, 8, tzm, 3) & eq) | (currentNode & ~eq);
+        // printf("cur: %d\n", currentNode);
 
         eq = ~(((1<<3) - currentNode)>>31);
         t1 = tx0 - r->t_end;
         t2 = tym - r->t_end;
         t3 = tzm - r->t_end;
-        valid_node = (unsigned long long)(*((unsigned long long*)(&t1)) & *((unsigned long long*)(&t2)) & *((unsigned long long*)(&t3)) & 0x8000000000000000)>>63;
+        valid_node = (long long)(*((unsigned long long*)(&t1)) & *((unsigned long long*)(&t2)) & *((unsigned long long*)(&t3)) & 0x8000000000000000)>>63;
         nodes |= currentNode & valid_node & eq;
         currentNode = (new_node(txm, 7, ty1, 8, tz1, 8) & eq) | (currentNode & ~eq);
+        // printf("cur: %d\n", currentNode);
 
         eq = ~(((1<<4) - currentNode)>>31);
         t1 = txm - r->t_end;
         t2 = ty0 - r->t_end;
         t3 = tz0 - r->t_end;
-        valid_node = (unsigned long long)(*((unsigned long long*)(&t1)) & *((unsigned long long*)(&t2)) & *((unsigned long long*)(&t3)) & 0x8000000000000000)>>63;
+        valid_node = (long long)(*((unsigned long long*)(&t1)) & *((unsigned long long*)(&t2)) & *((unsigned long long*)(&t3)) & 0x8000000000000000)>>63;
         nodes |= currentNode & valid_node & eq;
         currentNode = (new_node(tx1, 8, tym, 6, tzm, 5) & eq) | (currentNode & ~eq);
+        // printf("cur: %d\n", currentNode);
 
         eq = ~(((1<<5) - currentNode)>>31);
         t1 = txm - r->t_end;
         t2 = ty0 - r->t_end;
         t3 = tzm - r->t_end;
-        valid_node = (unsigned long long)(*((unsigned long long*)(&t1)) & *((unsigned long long*)(&t2)) & *((unsigned long long*)(&t3)) & 0x8000000000000000)>>63;
+        valid_node = (long long)(*((unsigned long long*)(&t1)) & *((unsigned long long*)(&t2)) & *((unsigned long long*)(&t3)) & 0x8000000000000000)>>63;
         nodes |= currentNode & valid_node & eq;
         currentNode = (new_node(tx1, 8, tym, 7, tz1, 8) & eq) | (currentNode & ~eq);
+        // printf("cur: %d\n", currentNode);
 
         eq = ~(((1<<6) - currentNode)>>31);
         t1 = txm - r->t_end;
         t2 = tym - r->t_end;
         t3 = tz0 - r->t_end;
-        valid_node = (unsigned long long)(*((unsigned long long*)(&t1)) & *((unsigned long long*)(&t2)) & *((unsigned long long*)(&t3)) & 0x8000000000000000)>>63;
+        valid_node = (long long)(*((unsigned long long*)(&t1)) & *((unsigned long long*)(&t2)) & *((unsigned long long*)(&t3)) & 0x8000000000000000)>>63;
         nodes |= currentNode & valid_node & eq;
         currentNode = (new_node(tx1, 8, ty1, 8, tzm, 7) & eq) | (currentNode & ~eq);
+        // printf("cur: %d\n", currentNode);
 
         eq = ~(((1<<7) - currentNode)>>31);
         t1 = txm - r->t_end;
         t2 = tym - r->t_end;
         t3 = tzm - r->t_end;
-        valid_node = (unsigned long long)(*((unsigned long long*)(&t1)) & *((unsigned long long*)(&t2)) & *((unsigned long long*)(&t3)) & 0x8000000000000000)>>63;
+        valid_node = (long long)(*((unsigned long long*)(&t1)) & *((unsigned long long*)(&t2)) & *((unsigned long long*)(&t3)) & 0x8000000000000000)>>63;
         nodes |= currentNode & valid_node & eq;
     }
 

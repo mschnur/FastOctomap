@@ -59,6 +59,7 @@ Terminal Logic:
 
 Instructions:
 - FP MUL - 5 cycles, 1 instr/cycle p0
+- FMA - 5 cycles, 2 instr/cycle, p01
 - FP ADD/SUB - 3cycle lat, 1 instr/cycle p1
 
 - OR/AND
@@ -70,7 +71,9 @@ Instructions:
 FP ops will be bottleneck
 
 Based on class: MULs/FMAs (if we use SIMD) will be bottleneck.
-Need 5 rays at once to fill MUL/FMA pipelines.
+Need 5 rays at once to fill FP MUL/FMA pipelines (assuming the second FMA pipeline needs to be used by the other instructions);
+
+
 
 
 

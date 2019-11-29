@@ -15,7 +15,7 @@ int new_node(double txm, unsigned char x, double tym, unsigned char y, double tz
     currentNode |= (unsigned long long)(~*((unsigned long long*)(&tmp1)) & *((unsigned long long*)(&tmp3)) & 0x8000000000000000)>>(63-y);
     
     //Z
-    currentNode |= (unsigned long long)(~*((unsigned long long*)(&tmp1)) & ~*((unsigned long long*)(&tmp3)) & 0x8000000000000000)>>(63-z);
+    currentNode |= (unsigned long long)( ~*(unsigned long long*)(&tmp3) & ~*(unsigned long long*)(&tmp2) & 0x8000000000000000 )>>(63-z);
 
     return (unsigned int)currentNode;
 }
