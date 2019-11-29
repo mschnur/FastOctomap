@@ -1,3 +1,6 @@
+#include <assert.h>
+
+
 inline int is_less(double pointX, double pointY, double pointZ,
                    double minX, double minY, double minZ)
 {
@@ -49,32 +52,32 @@ void proc_subtree(double tx0, double ty0, double tz0,
         return;
     }
 
-    //if we are at max depth there wont be any children
-    if (depth == MAX_DEPTH) {
-        double logLikelihoodUpdate = 0.0;
+    // //if we are at max depth there wont be any children
+    // if (depth == MAX_DEPTH) {
+    //     double logLikelihoodUpdate = 0.0;
 
-        if (is_greater(r->t_end, r->t_end, r->t_end, tx1, ty1, tz1))
-        {
-            // The ray endpoint does not occur in this subtree, but the ray passes through this subtree on its
-            // way to the endpoint, and we're at our maximum depth. Therefore we need to give this node a vote
-            // that it is free space.
-            logLikelihoodUpdate = PROB_MISS_LOG;
-        }
-        else
-        {
-            // The ray endpoint occurs within this subtree, and we're at our maximum depth. Therefore we need to
-            // give this node a vote that it is occupied.
-            logLikelihoodUpdate = PROB_HIT_LOG;
-        }
+    //     if (is_greater(r->t_end, r->t_end, r->t_end, tx1, ty1, tz1))
+    //     {
+    //         // The ray endpoint does not occur in this subtree, but the ray passes through this subtree on its
+    //         // way to the endpoint, and we're at our maximum depth. Therefore we need to give this node a vote
+    //         // that it is free space.
+    //         logLikelihoodUpdate = PROB_MISS_LOG;
+    //     }
+    //     else
+    //     {
+    //         // The ray endpoint occurs within this subtree, and we're at our maximum depth. Therefore we need to
+    //         // give this node a vote that it is occupied.
+    //         logLikelihoodUpdate = PROB_HIT_LOG;
+    //     }
 
-        // Do the update
-        n->logOdds += logLikelihoodUpdate;
+    //     // Do the update
+    //     n->logOdds += logLikelihoodUpdate;
 
-        // Clamp the logOdds between the min/max
-        n->logOdds = fmax(CLAMPING_THRES_MIN, fmin(n->logOdds, CLAMPING_THRES_MAX));
+    //     // Clamp the logOdds between the min/max
+    //     n->logOdds = fmax(CLAMPING_THRES_MIN, fmin(n->logOdds, CLAMPING_THRES_MAX));
     
-        return;
-    }
+    //     return;
+    // }
 
 
     /******
@@ -182,55 +185,56 @@ void proc_subtree(double tx0, double ty0, double tz0,
      * Process all computed nodes
      ******/
     for (int node = 0; node < 8; node++){
-        if(nodes && (1u<<node)){
-            switch (node) {
-                case 0:
-                    createChildIfItDoesntExist(n, a);
-                    proc_subtree(tx0, ty0, tz0, txm, tym, tzm, depth + 1, n->children[a], a, r);
-                    break;
+        if(nodes & (1u<<node)){
+            printf("%d\n", node);
+            // switch (node) {
+            //     case 0:
+            //         createChildIfItDoesntExist(n, a);
+            //         proc_subtree(tx0, ty0, tz0, txm, tym, tzm, depth + 1, n->children[a], a, r);
+            //         break;
 
-                case 1:
-                    createChildIfItDoesntExist(n, 1u^a);
-                    proc_subtree(tx0, ty0, tzm, txm, tym, tz1, depth + 1, n->children[1u^a], a, r);
-                    break;
+            //     case 1:
+            //         createChildIfItDoesntExist(n, 1u^a);
+            //         proc_subtree(tx0, ty0, tzm, txm, tym, tz1, depth + 1, n->children[1u^a], a, r);
+            //         break;
 
-                case 2:
-                    createChildIfItDoesntExist(n, 2u^a);
-                    proc_subtree(tx0, tym, tz0, txm, ty1, tzm, depth + 1, n->children[2u^a], a, r);
-                    break;
+            //     case 2:
+            //         createChildIfItDoesntExist(n, 2u^a);
+            //         proc_subtree(tx0, tym, tz0, txm, ty1, tzm, depth + 1, n->children[2u^a], a, r);
+            //         break;
 
-                case 3:
-                    createChildIfItDoesntExist(n, 3u^a);
-                    proc_subtree(tx0, tym, tzm, txm, ty1, tz1, depth + 1, n->children[3u^a], a, r);
-                    break;
+            //     case 3:
+            //         createChildIfItDoesntExist(n, 3u^a);
+            //         proc_subtree(tx0, tym, tzm, txm, ty1, tz1, depth + 1, n->children[3u^a], a, r);
+            //         break;
 
-                case 4:
-                    createChildIfItDoesntExist(n, 4u^a);
-                    proc_subtree(txm, ty0, tz0, tx1, tym, tzm, depth + 1, n->children[4u^a], a, r);
-                    break;
+            //     case 4:
+            //         createChildIfItDoesntExist(n, 4u^a);
+            //         proc_subtree(txm, ty0, tz0, tx1, tym, tzm, depth + 1, n->children[4u^a], a, r);
+            //         break;
 
-                case 5:
-                    createChildIfItDoesntExist(n, 5u^a);
-                    proc_subtree(txm, ty0, tzm, tx1, tym, tz1, depth + 1, n->children[5u^a], a, r);
-                    break;
+            //     case 5:
+            //         createChildIfItDoesntExist(n, 5u^a);
+            //         proc_subtree(txm, ty0, tzm, tx1, tym, tz1, depth + 1, n->children[5u^a], a, r);
+            //         break;
 
-                case 6:
-                    createChildIfItDoesntExist(n, 6u^a);
-                    proc_subtree(txm, tym, tz0, tx1, ty1, tzm, depth + 1, n->children[6u^a], a, r);
-                    break;
+            //     case 6:
+            //         createChildIfItDoesntExist(n, 6u^a);
+            //         proc_subtree(txm, tym, tz0, tx1, ty1, tzm, depth + 1, n->children[6u^a], a, r);
+            //         break;
 
-                case 7:
-                    createChildIfItDoesntExist(n, 7u^a);
-                    proc_subtree(txm, tym, tzm, tx1, ty1, tz1, depth + 1, n->children[7u^a], a, r);
-                    break;
+            //     case 7:
+            //         createChildIfItDoesntExist(n, 7u^a);
+            //         proc_subtree(txm, tym, tzm, tx1, ty1, tz1, depth + 1, n->children[7u^a], a, r);
+            //         break;
 
-                default:
-                    assert(0);
-            }
+            //     default:
+            //         assert(0);
+            // }
         }
     }
 
     //this should only happen if call was recusive
-    n->logOdds = maxChildLogLikelihood(n);
+    // n->logOdds = maxChildLogLikelihood(n);
 
 }

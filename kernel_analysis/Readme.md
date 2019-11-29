@@ -57,6 +57,23 @@ Terminal Logic:
 - assume zero cost (or fixed cost) of function call 
 - assume max number of nodes passed through (3?)
 
+Instructions:
+- FP MUL - 5 cycles, 1 instr/cycle p0
+- FP ADD/SUB - 3cycle lat, 1 instr/cycle p1
+
+- OR/AND
+    - 1 cyle lat, 4inst/cycle - p0156
+
+- SAR
+    - 1 cycle lat, 2inst/cycle - p06
+
+FP ops will be bottleneck
+
+Based on class: MULs/FMAs (if we use SIMD) will be bottleneck.
+Need 5 rays at once to fill MUL/FMA pipelines.
+
+
+
 ## Files
 
 conversions.c

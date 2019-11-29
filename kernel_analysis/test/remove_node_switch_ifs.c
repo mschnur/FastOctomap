@@ -1,4 +1,4 @@
-
+#include <assert.h>
 
 int new_node(double txm, unsigned char x, double tym, unsigned char y, double tzm, unsigned char z)
 {
@@ -75,53 +75,41 @@ void proc_subtree(double tx0, double ty0, double tz0,
         nodes |= 1u<<currentNode;
         currentNode = nodes;
 
-        do
-        {
-            switch (currentNode)
-            {
-                case (1u<<0):
-                    currentNode = new_node(txm, 4, tym, 2, tzm, 1);
-                    nodes |= currentNode;
-                    break;
+        if(currentNode == (1u<<0)) {
+            currentNode = new_node(txm, 4, tym, 2, tzm, 1);
+            nodes |= currentNode;
+        }
 
-                case (1u<<1):
-                    currentNode = new_node(txm, 5, tym, 3, tz1, 8);
-                    nodes |= currentNode;
-                    break;
+        if(currentNode == (1u<<1)) {
+            currentNode = new_node(txm, 5, tym, 3, tz1, 8);
+            nodes |= currentNode;
+        }
 
-                case (1u<<2):
-                    currentNode = new_node(txm, 6, ty1, 8, tzm, 3);
-                    nodes |= currentNode;
-                    break;
+        if(currentNode == (1u<<2)) {
+            currentNode = new_node(txm, 6, ty1, 8, tzm, 3);
+            nodes |= currentNode;
+        }
 
-                case (1u<<3):
-                    currentNode = new_node(txm, 7, ty1, 8, tz1, 8);
-                    nodes |= currentNode;
-                    break;
+        if(currentNode == (1u<<3)) {
+            currentNode = new_node(txm, 7, ty1, 8, tz1, 8);
+            nodes |= currentNode;
+        }
 
-                case (1u<<4):
-                    currentNode = new_node(tx1, 8, tym, 6, tzm, 5);
-                    nodes |= currentNode;
-                    break;
+        if(currentNode == (1u<<4)) {
+            currentNode = new_node(tx1, 8, tym, 6, tzm, 5);
+            nodes |= currentNode;
+        }
 
-                case (1u<<5):
-                    currentNode = new_node(tx1, 8, tym, 7, tz1, 8);
-                    nodes |= currentNode;
-                    break;
+        if(currentNode == (1u<<5)) {
+            currentNode = new_node(tx1, 8, tym, 7, tz1, 8);
+            nodes |= currentNode;
+        }
 
-                case (1u<<6):
-                    currentNode = new_node(tx1, 8, ty1, 8, tzm, 7);
-                    nodes |= currentNode;
-                    break;
+        if(currentNode == (1u<<6)) {
+            currentNode = new_node(tx1, 8, ty1, 8, tzm, 7);
+            nodes |= currentNode;
+        }
 
-                case (1u<<7):
-                    currentNode = (1u<<8);
-                    break;
-
-                default:
-                    assert(0);
-            }
-        } while (currentNode < (1u<<8));
     }
 
     /******
@@ -129,45 +117,46 @@ void proc_subtree(double tx0, double ty0, double tz0,
      ******/
     for (int node = 0; node < 8; node++){
         if(nodes & (1u<<node)){
+            printf("%d\n",node);
             switch (node) {
                 case 0:
-                    createChildIfItDoesntExist(n, a);
-                    proc_subtree(tx0, ty0, tz0, txm, tym, tzm, depth + 1, n->children[a], a, r);
+                    // createChildIfItDoesntExist(n, a);
+                    // proc_subtree(tx0, ty0, tz0, txm, tym, tzm, depth + 1, n->children[a], a, r);
                     break;
 
                 case 1:
-                    createChildIfItDoesntExist(n, 1u^a);
-                    proc_subtree(tx0, ty0, tzm, txm, tym, tz1, depth + 1, n->children[1u^a], a, r);
+                    // createChildIfItDoesntExist(n, 1u^a);
+                    // proc_subtree(tx0, ty0, tzm, txm, tym, tz1, depth + 1, n->children[1u^a], a, r);
                     break;
 
                 case 2:
-                    createChildIfItDoesntExist(n, 2u^a);
-                    proc_subtree(tx0, tym, tz0, txm, ty1, tzm, depth + 1, n->children[2u^a], a, r);
+                    // createChildIfItDoesntExist(n, 2u^a);
+                    // proc_subtree(tx0, tym, tz0, txm, ty1, tzm, depth + 1, n->children[2u^a], a, r);
                     break;
 
                 case 3:
-                    createChildIfItDoesntExist(n, 3u^a);
-                    proc_subtree(tx0, tym, tzm, txm, ty1, tz1, depth + 1, n->children[3u^a], a, r);
+                    // createChildIfItDoesntExist(n, 3u^a);
+                    // proc_subtree(tx0, tym, tzm, txm, ty1, tz1, depth + 1, n->children[3u^a], a, r);
                     break;
 
                 case 4:
-                    createChildIfItDoesntExist(n, 4u^a);
-                    proc_subtree(txm, ty0, tz0, tx1, tym, tzm, depth + 1, n->children[4u^a], a, r);
+                    // createChildIfItDoesntExist(n, 4u^a);
+                    // proc_subtree(txm, ty0, tz0, tx1, tym, tzm, depth + 1, n->children[4u^a], a, r);
                     break;
 
                 case 5:
-                    createChildIfItDoesntExist(n, 5u^a);
-                    proc_subtree(txm, ty0, tzm, tx1, tym, tz1, depth + 1, n->children[5u^a], a, r);
+                    // createChildIfItDoesntExist(n, 5u^a);
+                    // proc_subtree(txm, ty0, tzm, tx1, tym, tz1, depth + 1, n->children[5u^a], a, r);
                     break;
 
                 case 6:
-                    createChildIfItDoesntExist(n, 6u^a);
-                    proc_subtree(txm, tym, tz0, tx1, ty1, tzm, depth + 1, n->children[6u^a], a, r);
+                    // createChildIfItDoesntExist(n, 6u^a);
+                    // proc_subtree(txm, tym, tz0, tx1, ty1, tzm, depth + 1, n->children[6u^a], a, r);
                     break;
 
                 case 7:
-                    createChildIfItDoesntExist(n, 7u^a);
-                    proc_subtree(txm, tym, tzm, tx1, ty1, tz1, depth + 1, n->children[7u^a], a, r);
+                    // createChildIfItDoesntExist(n, 7u^a);
+                    // proc_subtree(txm, tym, tzm, tx1, ty1, tz1, depth + 1, n->children[7u^a], a, r);
                     break;
 
                 default:
