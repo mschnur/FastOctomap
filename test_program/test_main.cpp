@@ -9,7 +9,7 @@
 
 #include "FastOctree.h"
 
-#define INSERT_RAY_BY_RAY 0
+#define INSERT_RAY_BY_RAY 1
 
 void printUsage(const char* self)
 {
