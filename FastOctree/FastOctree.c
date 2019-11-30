@@ -272,16 +272,6 @@ void proc_subtree(double tx0, double ty0, double tz0,
 #endif
     }
 
-    if (any_is_less(r->t_end, r->t_end, r->t_end, tx0, ty0, tz0))
-    {
-#ifdef DEBUG_PROC_SUBTREE
-        printf("r->t_end is less than at least one of tx0, ty0, and tz0; returning\n");
-#endif
-        // The ray endpoint happened before at least one of the minimum t values of this subtree, meaning the ray
-        // ends before this subtree. Therefore, we don't want to do anything to this subtree.
-        return;
-    }
-
     if (!nodeHasAnyChildren(n))
     {
         if (depth == MAX_DEPTH)
@@ -388,37 +378,74 @@ void proc_subtree(double tx0, double ty0, double tz0,
     unsigned char nodes = 0;
     currentNode = 1u<<currentNode;
 
+    double t1,t2,t3;
+    int eq;
+    long long valid_node;
 
-    int eq = ~(((1<<0) - currentNode)>>31);
-    nodes |= currentNode & eq;
+
+    eq = ~(((1<<0) - currentNode)>>31);
+    //this should compute if the currentNode is valid.
+    t1 = tx0 - r->t_end;
+    t2 = ty0 - r->t_end;
+    t3 = tz0 - r->t_end;
+    valid_node = (long long)(*((unsigned long long*)(&t1)) & *((unsigned long long*)(&t2)) & *((unsigned long long*)(&t3)) & 0x8000000000000000)>>63;
+    nodes |= currentNode & valid_node & eq;
     currentNode = (new_node(txm, 4, tym, 2, tzm, 1) & eq) | (currentNode & ~eq);
 
     eq = ~(((1<<1) - currentNode)>>31);
-    nodes |= currentNode & eq;
-    currentNode = (new_node(txm, 5, tym, 3, tz1, 8) & eq)| (currentNode & ~eq);
+    t1 = tx0 - r->t_end;
+    t2 = ty0 - r->t_end;
+    t3 = tzm - r->t_end;
+    valid_node = (long long)(*((unsigned long long*)(&t1)) & *((unsigned long long*)(&t2)) & *((unsigned long long*)(&t3)) & 0x8000000000000000)>>63;
+    nodes |= currentNode & valid_node & eq;
+    currentNode = (new_node(txm, 5, tym, 3, tz1, 8) & eq) | (currentNode & ~eq);
 
     eq = ~(((1<<2) - currentNode)>>31);
-    nodes |= currentNode & eq;
+    t1 = tx0 - r->t_end;
+    t2 = tym - r->t_end;
+    t3 = tz0 - r->t_end;
+    valid_node = (long long)(*((unsigned long long*)(&t1)) & *((unsigned long long*)(&t2)) & *((unsigned long long*)(&t3)) & 0x8000000000000000)>>63;
+    nodes |= currentNode & valid_node & eq;
     currentNode = (new_node(txm, 6, ty1, 8, tzm, 3) & eq) | (currentNode & ~eq);
 
     eq = ~(((1<<3) - currentNode)>>31);
-    nodes |= currentNode & eq;
+    t1 = tx0 - r->t_end;
+    t2 = tym - r->t_end;
+    t3 = tzm - r->t_end;
+    valid_node = (long long)(*((unsigned long long*)(&t1)) & *((unsigned long long*)(&t2)) & *((unsigned long long*)(&t3)) & 0x8000000000000000)>>63;
+    nodes |= currentNode & valid_node & eq;
     currentNode = (new_node(txm, 7, ty1, 8, tz1, 8) & eq) | (currentNode & ~eq);
 
     eq = ~(((1<<4) - currentNode)>>31);
-    nodes |= currentNode & eq;
+    t1 = txm - r->t_end;
+    t2 = ty0 - r->t_end;
+    t3 = tz0 - r->t_end;
+    valid_node = (long long)(*((unsigned long long*)(&t1)) & *((unsigned long long*)(&t2)) & *((unsigned long long*)(&t3)) & 0x8000000000000000)>>63;
+    nodes |= currentNode & valid_node & eq;
     currentNode = (new_node(tx1, 8, tym, 6, tzm, 5) & eq) | (currentNode & ~eq);
 
     eq = ~(((1<<5) - currentNode)>>31);
-    nodes |= currentNode & eq;
+    t1 = txm - r->t_end;
+    t2 = ty0 - r->t_end;
+    t3 = tzm - r->t_end;
+    valid_node = (long long)(*((unsigned long long*)(&t1)) & *((unsigned long long*)(&t2)) & *((unsigned long long*)(&t3)) & 0x8000000000000000)>>63;
+    nodes |= currentNode & valid_node & eq;
     currentNode = (new_node(tx1, 8, tym, 7, tz1, 8) & eq) | (currentNode & ~eq);
 
     eq = ~(((1<<6) - currentNode)>>31);
-    nodes |= currentNode & eq;
+    t1 = txm - r->t_end;
+    t2 = tym - r->t_end;
+    t3 = tz0 - r->t_end;
+    valid_node = (long long)(*((unsigned long long*)(&t1)) & *((unsigned long long*)(&t2)) & *((unsigned long long*)(&t3)) & 0x8000000000000000)>>63;
+    nodes |= currentNode & valid_node & eq;
     currentNode = (new_node(tx1, 8, ty1, 8, tzm, 7) & eq) | (currentNode & ~eq);
 
     eq = ~(((1<<7) - currentNode)>>31);
-    nodes |= currentNode & eq;
+    t1 = txm - r->t_end;
+    t2 = tym - r->t_end;
+    t3 = tzm - r->t_end;
+    valid_node = (long long)(*((unsigned long long*)(&t1)) & *((unsigned long long*)(&t2)) & *((unsigned long long*)(&t3)) & 0x8000000000000000)>>63;
+    nodes |= currentNode & valid_node & eq;
 
     for(int node = 0; node < 8; node++) {
         int createdChild = FALSE;
