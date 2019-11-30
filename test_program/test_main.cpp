@@ -15,6 +15,19 @@ void printUsage(const char* self)
     exit(0);
 }
 
+void makeOctomapNodeCsv(const std::string& filename, octomap::OcTree& tree)
+{
+	std::ofstream outFile(filename, std::ios::trunc);
+	outFile << "depth,centerX,centerY,centerZ,size,value" << std::endl;
+	
+	for(octomap::OcTree::tree_iterator it = tree.begin_tree(), end=tree.end_tree(); it!= end; ++it)
+	{
+		octomap::point3d center = it.getCoordinate();
+	    outFile << it.getDepth() << "," << center.x() << "," << center.y() << "," << center.z() << ","
+		        << it.getSize() << "," << it->getValue() << std::endl;
+	}
+}
+
 int main(int argc, char** argv)
 {
     // default values:
@@ -63,31 +76,37 @@ int main(int argc, char** argv)
 		
 		std::stringstream filenameStream;
 		filenameStream << "octomap_nodes_after_pointcloud_" << currentScan << ".csv";
+		makeOctomapNodeCsv(filenameStream.str(), *tree);
 
 		{
-			std::ofstream outFile(filenameStream.str(), std::ios::trunc);
-			outFile << "depth,centerX,centerY,centerZ,size,value" << std::endl;
-			
-			for(octomap::OcTree::tree_iterator it = tree->begin_tree(), end=tree->end_tree(); it!= end; ++it)
-			{
-				octomap::point3d center = it.getCoordinate();
-			    outFile << it.getDepth() << "," << center.x() << "," << center.y() << "," << center.z() << ","
-				        << it.getSize() << "," << it->getValue() << std::endl;
-			}
-		}
+			Vector3d sensorOrigin = {};
+			const octomap::point3d& sensorOriginOctomap = (*scan_it)->pose.trans();
+			initVector3d(&sensorOrigin, sensorOriginOctomap.x(), sensorOriginOctomap.y(), sensorOriginOctomap.z());
 
-		{
 			static Vector3d pointsBuffer[300000] = {};
 			size_t numPoints = (*scan_it)->scan->size();
 			for (size_t i = 0; i < numPoints; ++i)
 			{
 				const octomap::point3d& pt = (*scan_it)->scan->getPoint(i);
 				initVector3d(&(pointsBuffer[i]), pt.x(), pt.y(), pt.z());
-			}
 
-			Vector3d sensorOrigin = {};
-			const octomap::point3d& sensorOriginOctomap = (*scan_it)->pose.trans();
-			initVector3d(&sensorOrigin, sensorOriginOctomap.x(), sensorOriginOctomap.y(), sensorOriginOctomap.z());
+				/*
+				tree->insertRay((*scan_it)->pose.trans(), pt);
+				std::stringstream filenameStream;
+				filenameStream << "octomap_nodes_after_pointcloud_" << currentScan << "_point_" << i << ".csv";
+				makeOctomapNodeCsv(filenameStream.str(), *tree);
+
+				std::stringstream fastOctreeFilenameStream;
+				fastOctreeFilenameStream << "FastOctree_preprune_nodes_after_pointcloud_" << currentScan << "_point_" << i << ".csv";
+				insertPointCloud(&fastOctree, &(pointsBuffer[i]), 1, &sensorOrigin);
+				createNodeCsv(&fastOctree, fastOctreeFilenameStream.str().c_str());
+
+				std::stringstream fastOctreePostPruneFilenameStream;
+				fastOctreePostPruneFilenameStream << "FastOctree_postprune_nodes_after_pointcloud_" << currentScan << "_point_" << i << ".csv";
+				pruneTree(&fastOctree);
+				createNodeCsv(&fastOctree, fastOctreePostPruneFilenameStream.str().c_str());
+				*/
+			}
 
 			insertPointCloud(&fastOctree, pointsBuffer, numPoints, &sensorOrigin);
 
@@ -107,6 +126,7 @@ int main(int argc, char** argv)
 		std::cout << currentScan << "," << (*scan_it)->scan->size() << "," << time_to_insert << std::endl;
        
         currentScan++;
+        break;
     }
 	
     return 0;

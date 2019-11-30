@@ -21,11 +21,11 @@ extern const Node *const NO_CHILDREN[8];
 #define RESOLUTION 0.05
 #define MAX_DEPTH 16u
 
-extern const double CLAMPING_THRES_MIN;
-extern const double CLAMPING_THRES_MAX;
-extern const double PROB_HIT_LOG;
-extern const double PROB_MISS_LOG;
-extern const double OCC_PROB_THRES_LOG;
+extern double CLAMPING_THRES_MIN;
+extern double CLAMPING_THRES_MAX;
+extern double PROB_HIT_LOG;
+extern double PROB_MISS_LOG;
+extern double OCC_PROB_THRES_LOG;
 
 extern const double SIZE_LOOKUP_TABLE[MAX_DEPTH + 1];
 
@@ -50,9 +50,22 @@ typedef struct Ray {
     double t_end;
 } Ray;
 
+void pruneTree(Octree* tree);
+
 void createNodeCsv(Octree *tree, const char *filename);
 
 void insertPointCloud(Octree *tree, Vector3d *points, size_t numPoints, Vector3d *sensorOrigin);
+
+/// compute log-odds from probability:
+static inline double logodds(double probability){
+    return log(probability / (1.0 - probability));
+}
+
+/// compute probability from logodds:
+inline double probability(double logodds){
+    return 1.0 - ( 1.0 / (1.0 + exp(logodds)));
+
+}
 
 static inline void initVector3d(Vector3d *v, double x, double y, double z) {
     v->x = x;
@@ -84,6 +97,7 @@ static inline void initRay(Ray *r, double ox, double oy, double oz, double ex, d
     initVector3d(&(r->end), ex, ey, ez);
     vectorSubtract(&(r->end), &(r->origin), &(r->direction));
     vectorNormalizeInPlace(&(r->direction));
+    r->t_end = (ex - ox) / r->direction.x;
 }
 
 static inline void initOctree(Octree *tree) {
