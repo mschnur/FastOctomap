@@ -10,6 +10,7 @@ extern "C" {
 #endif
 
 #include <math.h>
+#include <sys/types.h>
 
 struct Node;
 typedef struct Node Node;
