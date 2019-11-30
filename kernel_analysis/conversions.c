@@ -28,29 +28,6 @@ int first_node(double tx0, double ty0, double tz0, double txm, double tym, doubl
     return (int) answer;
 }
 
-int first_node_one(double tx0, double ty0, double tz0, double txm, double tym, double tzm){
-    unsigned char currentNode = 0;
-    
-    // select the entry plane and set bits
-    if(tx0 > ty0) {
-        if(tx0 > tz0) {   // PLANE YZ
-            if(tym < tx0) currentNode|=2u;	// set bit at position 1
-            if(tzm < tx0) currentNode|=1u;	// set bit at position 0
-        }
-    }
-    else if(ty0 > tz0) { 
-            // PLANE XZ
-            if(txm < ty0) currentNode|=4u;	// set bit at position 2
-            if(tzm < ty0) currentNode|=1u;	// set bit at position 0
-    }
-    else {
-        // PLANE XY
-        if(txm < tz0) currentNode|=4u;	// set bit at position 2
-        if(tym < tz0) currentNode|=2u;	// set bit at position 1
-    }
-    return currentNode;
-}
-
 int first_node_two(double tx0, double ty0, double tz0, double txm, double tym, double tzm){
     unsigned long long currentNode = 0;
     
@@ -74,8 +51,8 @@ int first_node_two(double tx0, double ty0, double tz0, double txm, double tym, d
     currentNode |= (unsigned long long)(~*((unsigned long long*)(&tmp1)) & *((unsigned long long*)(&tmp5)) & *((unsigned long long*)(&tmp6)) & 0x8000000000000000)>>61;
     currentNode |= (unsigned long long)(~*((unsigned long long*)(&tmp1)) & *((unsigned long long*)(&tmp5)) & *((unsigned long long*)(&tmp7)) & 0x8000000000000000)>>63;
 
-    currentNode |= (unsigned long long)(~*((unsigned long long*)(&tmp1)) & ~*((unsigned long long*)(&tmp5)) & *((unsigned long long*)(&tmp8)) & 0x8000000000000000)>>61;
-    currentNode |= (unsigned long long)(~*((unsigned long long*)(&tmp1)) & ~*((unsigned long long*)(&tmp5)) & *((unsigned long long*)(&tmp9)) & 0x8000000000000000)>>62;
+    currentNode |= (unsigned long long)(~*((unsigned long long*)(&tmp2)) & ~*((unsigned long long*)(&tmp5)) & *((unsigned long long*)(&tmp8)) & 0x8000000000000000)>>61;
+    currentNode |= (unsigned long long)(~*((unsigned long long*)(&tmp2)) & ~*((unsigned long long*)(&tmp5)) & *((unsigned long long*)(&tmp9)) & 0x8000000000000000)>>62;
 
     return (unsigned char)currentNode;
 }
@@ -122,19 +99,18 @@ int main(){
     double tx0,ty0,tz0,txm,tym,tzm;
 
 
-    tx0 = -3196.9569552045646;
-    ty0 = -1954.8123974311923;
-    tz0 = -8804.1823021764267;
+    tx0 = 0.20174328731773455;
+    ty0 = 0.085902729388333959;
+    tz0 = 0.28024246786411733;
 
-    txm = 2.9360268413120139;
-    tym = -1.1065446904973442;
-    tzm = 7.8100210643833634;
+    txm = 0.3970492554601831;
+    tym = 0.20514747137690176;
+    tzm = 0.81808379618692062;
 
     answer = first_node(tx0,ty0,tz0,txm,tym,tzm);
-    answer1 = first_node_one(tx0,ty0,tz0,txm,tym,tzm);
     answer2 = first_node_two(tx0,ty0,tz0,txm,tym,tzm);
 
-    printf("%d:%d:%d\n", answer,answer1,answer2);
+    printf("%d:%d\n", answer,answer2);
 
     /*
     //first_node tests

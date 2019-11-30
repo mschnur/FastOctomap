@@ -201,35 +201,7 @@ static inline int is_between_vector3d(const Vector3d* min,
 // Core algorithm functions
 //###########################################################################################
 
-int first_node(double tx0, double ty0, double tz0, double txm, double tym, double tzm)
-{
-    unsigned char answer = 0;	// initialize to 00000000
-    // select the entry plane and set bits
-    if(tx0 > ty0)
-    {
-        if(tx0 > tz0)
-        {   // PLANE YZ
-            if(tym < tx0) answer|=2u;	// set bit at position 1
-            if(tzm < tx0) answer|=1u;	// set bit at position 0
-            return (int) answer;
-        }
-    }
-    else
-    {
-        if(ty0 > tz0)
-        { // PLANE XZ
-            if(txm < ty0) answer|=4u;	// set bit at position 2
-            if(tzm < ty0) answer|=1u;	// set bit at position 0
-            return (int) answer;
-        }
-    }
-    // PLANE XY
-    if(txm < tz0) answer|=4u;	// set bit at position 2
-    if(tym < tz0) answer|=2u;	// set bit at position 1
-    return (int) answer;
-}
-
-int first_node_two(double tx0, double ty0, double tz0, double txm, double tym, double tzm){
+int first_node(double tx0, double ty0, double tz0, double txm, double tym, double tzm){
     unsigned long long currentNode = 0;
     
     // select the entry plane and set bits
@@ -252,8 +224,8 @@ int first_node_two(double tx0, double ty0, double tz0, double txm, double tym, d
     currentNode |= (unsigned long long)(~*((unsigned long long*)(&tmp1)) & *((unsigned long long*)(&tmp5)) & *((unsigned long long*)(&tmp6)) & 0x8000000000000000)>>61;
     currentNode |= (unsigned long long)(~*((unsigned long long*)(&tmp1)) & *((unsigned long long*)(&tmp5)) & *((unsigned long long*)(&tmp7)) & 0x8000000000000000)>>63;
 
-    currentNode |= (unsigned long long)(~*((unsigned long long*)(&tmp1)) & ~*((unsigned long long*)(&tmp5)) & *((unsigned long long*)(&tmp8)) & 0x8000000000000000)>>61;
-    currentNode |= (unsigned long long)(~*((unsigned long long*)(&tmp1)) & ~*((unsigned long long*)(&tmp5)) & *((unsigned long long*)(&tmp9)) & 0x8000000000000000)>>62;
+    currentNode |= (unsigned long long)(~*((unsigned long long*)(&tmp2)) & ~*((unsigned long long*)(&tmp5)) & *((unsigned long long*)(&tmp8)) & 0x8000000000000000)>>61;
+    currentNode |= (unsigned long long)(~*((unsigned long long*)(&tmp2)) & ~*((unsigned long long*)(&tmp5)) & *((unsigned long long*)(&tmp9)) & 0x8000000000000000)>>62;
 
     return (int)currentNode;
 }
@@ -406,7 +378,6 @@ void proc_subtree(double tx0, double ty0, double tz0,
 #endif
 
     currentNode = first_node(tx0, ty0, tz0, txm, tym, tzm);
-    int currentNode2 = first_node_two(tx0, ty0, tz0, txm, tym, tzm);
 
 
 #ifdef DEBUG_PROC_SUBTREE
