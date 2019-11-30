@@ -272,18 +272,19 @@ void proc_subtree(double tx0, double ty0, double tz0,
 #endif
     }
 
+    if (any_is_less(r->t_end, r->t_end, r->t_end, tx0, ty0, tz0))
+    {
+#ifdef DEBUG_PROC_SUBTREE
+        printf("r->t_end is less than at least one of tx0, ty0, and tz0; returning\n");
+#endif
+        // The ray endpoint happened before at least one of the minimum t values of this subtree, meaning the ray
+        // ends before this subtree. Therefore, we don't want to do anything to this subtree.
+        return;
+    }
+
     if (!nodeHasAnyChildren(n))
     {
-        if (any_is_less(r->t_end, r->t_end, r->t_end, tx0, ty0, tz0))
-        {
-#ifdef DEBUG_PROC_SUBTREE
-            printf("r->t_end is less than at least one of tx0, ty0, and tz0; returning\n");
-#endif
-            // The ray endpoint happened before at least one of the minimum t values of this subtree, meaning the ray
-            // ends before this subtree. Therefore, we don't want to do anything to this subtree.
-            return;
-        }
-        else if (depth == MAX_DEPTH)
+        if (depth == MAX_DEPTH)
         {
 #ifdef DEBUG_PROC_SUBTREE
             printf("depth is equal to MAX_DEPTH, so updating the log likelihood of this node\n");
