@@ -201,47 +201,28 @@ static inline int is_between_vector3d(const Vector3d* min,
 // Core algorithm functions
 //###########################################################################################
 
-int first_node(double tx0, double ty0, double tz0, double txm, double tym, double tzm)
-{
-    unsigned char answer = 0;	// initialize to 00000000
-    // select the entry plane and set bits
-    if(tx0 > ty0)
-    {
-        if(tx0 > tz0)
-        {   // PLANE YZ
-            if(tym < tx0) answer|=2u;	// set bit at position 1
-            if(tzm < tx0) answer|=1u;	// set bit at position 0
-            return (int) answer;
-        }
-    }
-    else
-    {
-        if(ty0 > tz0)
-        { // PLANE XZ
-            if(txm < ty0) answer|=4u;	// set bit at position 2
-            if(tzm < ty0) answer|=1u;	// set bit at position 0
-            return (int) answer;
-        }
-    }
-    // PLANE XY
-    if(txm < tz0) answer|=4u;	// set bit at position 2
-    if(tym < tz0) answer|=2u;	// set bit at position 1
-    return (int) answer;
-}
-
-
 int new_node(double txm, int x, double tym, int y, double tzm, int z)
 {
-    if(txm < tym)
-    {
-        if(txm < tzm){return x;}  // YZ plane
-    }
-    else
-    {
-        if(tym < tzm){return y;} // XZ plane
-    }
+    unsigned long long currentNode = 0;
 
-    return z; // XY plane;
+    // txm = 0.45;
+    // tym = 0.55;
+    // tzm = 0.175;
+
+    double tmp1 = txm - tym;
+    double tmp2 = txm - tzm;
+    double tmp3 = tym - tzm;
+
+    //X
+    currentNode |= (unsigned long long)(*((unsigned long long*)(&tmp1)) & *((unsigned long long*)(&tmp2)) & 0x8000000000000000)>>(63-x);
+    
+    //Y
+    currentNode |= (unsigned long long)(~*((unsigned long long*)(&tmp1)) & *((unsigned long long*)(&tmp3)) & 0x8000000000000000)>>(63-y);
+    
+    //Z
+    currentNode |= (unsigned long long)( ~*(unsigned long long*)(&tmp3) & ~*(unsigned long long*)(&tmp2) & 0x8000000000000000 )>>(63-z);
+
+    return (int)currentNode;
 }
 
 
@@ -403,111 +384,162 @@ void proc_subtree(double tx0, double ty0, double tz0,
     printf("depth=%u: first_node: %d\n", depth, currentNode);
 #endif
 
-    int createdChild = FALSE;
-    do
-    {
-        switch (currentNode)
-        {
-            case 0:
-                //createdChild = createChildIfItDoesntExist(n, a);
-#ifdef DEBUG_PROC_SUBTREE
-                //printf("depth=%u: current node = %d, child index = %u, created child = %s\n", depth, currentNode, a, (createdChild ? "TRUE" : "FALSE"));
-#endif
-                proc_subtree(tx0, ty0, tz0, txm, tym, tzm, depth + 1, createdChild, n->children[a], n, a, a, r);
+    unsigned char nodes = 0;
+    nodes |= 1u<<currentNode;
+    currentNode = nodes;
+
+    do {
+        switch (currentNode) {
+            case (1u<<0):
                 currentNode = new_node(txm, 4, tym, 2, tzm, 1);
-#ifdef DEBUG_PROC_SUBTREE
-                printf("depth=%u: previous node = 0, new_node = %d\n", depth, currentNode);
-#endif
+                nodes |= currentNode;
                 break;
 
-            case 1:
-                //createdChild = createChildIfItDoesntExist(n, 1u^a);
-#ifdef DEBUG_PROC_SUBTREE
-                //printf("depth=%u: current node = %d, child index = %u, created child = %s\n", depth, currentNode, 1u^a, (createdChild ? "TRUE" : "FALSE"));
-#endif
-                proc_subtree(tx0, ty0, tzm, txm, tym, tz1, depth + 1, createdChild, n->children[1u^a], n, 1u^a, a, r);
+            case (1u<<1):
                 currentNode = new_node(txm, 5, tym, 3, tz1, 8);
-#ifdef DEBUG_PROC_SUBTREE
-                printf("depth=%u: previous node = 1, new_node = %d\n", depth, currentNode);
-#endif
+                nodes |= currentNode;
                 break;
 
-            case 2:
-                //createdChild = createChildIfItDoesntExist(n, 2u^a);
-#ifdef DEBUG_PROC_SUBTREE
-                //printf("depth=%u: current node = %d, child index = %u, created child = %s\n", depth, currentNode, 2u^a, (createdChild ? "TRUE" : "FALSE"));
-#endif
-                proc_subtree(tx0, tym, tz0, txm, ty1, tzm, depth + 1, createdChild, n->children[2u^a], n, 2u^a, a, r);
+            case (1u<<2):
                 currentNode = new_node(txm, 6, ty1, 8, tzm, 3);
-#ifdef DEBUG_PROC_SUBTREE
-                printf("depth=%u: previous node = 2, new_node = %d\n", depth, currentNode);
-#endif
+                nodes |= currentNode;
                 break;
 
-            case 3:
-                //createdChild = createChildIfItDoesntExist(n, 3u^a);
-#ifdef DEBUG_PROC_SUBTREE
-                //printf("depth=%u: current node = %d, child index = %u, created child = %s\n", depth, currentNode, 3u^a, (createdChild ? "TRUE" : "FALSE"));
-#endif
-                proc_subtree(tx0, tym, tzm, txm, ty1, tz1, depth + 1, createdChild, n->children[3u^a], n, 3u^a, a, r);
+            case (1u<<3):
                 currentNode = new_node(txm, 7, ty1, 8, tz1, 8);
-#ifdef DEBUG_PROC_SUBTREE
-                printf("depth=%u: previous node = 3, new_node = %d\n", depth, currentNode);
-#endif
+                nodes |= currentNode;
                 break;
 
-            case 4:
-                //createdChild = createChildIfItDoesntExist(n, 4u^a);
-#ifdef DEBUG_PROC_SUBTREE
-                //printf("depth=%u: current node = %d, child index = %u, created child = %s\n", depth, currentNode, 4u^a, (createdChild ? "TRUE" : "FALSE"));
-#endif
-                proc_subtree(txm, ty0, tz0, tx1, tym, tzm, depth + 1, createdChild, n->children[4u^a], n, 4u^a, a, r);
+            case (1u<<4):
                 currentNode = new_node(tx1, 8, tym, 6, tzm, 5);
-#ifdef DEBUG_PROC_SUBTREE
-                printf("depth=%u: previous node = 4, new_node = %d\n", depth, currentNode);
-#endif
+                nodes |= currentNode;
                 break;
 
-            case 5:
-                //createdChild = createChildIfItDoesntExist(n, 5u^a);
-#ifdef DEBUG_PROC_SUBTREE
-                //printf("depth=%u: current node = %d, child index = %u, created child = %s\n", depth, currentNode, 5u^a, (createdChild ? "TRUE" : "FALSE"));
-#endif
-                proc_subtree(txm, ty0, tzm, tx1, tym, tz1, depth + 1, createdChild, n->children[5u^a], n, 5u^a, a, r);
+            case (1u<<5):
                 currentNode = new_node(tx1, 8, tym, 7, tz1, 8);
-#ifdef DEBUG_PROC_SUBTREE
-                printf("depth=%u: previous node = 5, new_node = %d\n", depth, currentNode);
-#endif
+                nodes |= currentNode;
                 break;
 
-            case 6:
-                //createdChild = createChildIfItDoesntExist(n, 6u^a);
-#ifdef DEBUG_PROC_SUBTREE
-                //printf("depth=%u: current node = %d, child index = %u, created child = %s\n", depth, currentNode, 6u^a, (createdChild ? "TRUE" : "FALSE"));
-#endif
-                proc_subtree(txm, tym, tz0, tx1, ty1, tzm, depth + 1, createdChild, n->children[6u^a], n, 6u^a, a, r);
+            case (1u<<6):
                 currentNode = new_node(tx1, 8, ty1, 8, tzm, 7);
-#ifdef DEBUG_PROC_SUBTREE
-                printf("depth=%u: previous node = 6, new_node = %d\n", depth, currentNode);
-#endif
+                nodes |= currentNode;
                 break;
 
-            case 7:
-                //createdChild = createChildIfItDoesntExist(n, 7u^a);
-#ifdef DEBUG_PROC_SUBTREE
-                //printf("depth=%u: current node = %d, child index = %u, created child = %s\n", depth, currentNode, 7u^a, (createdChild ? "TRUE" : "FALSE"));
-#endif
-                proc_subtree(txm, tym, tzm, tx1, ty1, tz1, depth + 1, createdChild, n->children[7u^a], n, 7u^a, a, r);
-                currentNode = 8;
-#ifdef DEBUG_PROC_SUBTREE
-                printf("depth=%u: previous node = 7, new_node = %d\n", depth, currentNode);
-#endif
+            case (1u<<7):
+                currentNode = (1u<<8);
                 break;
 
             default:
                 assert(0);
         }
-    } while (currentNode < 8);
+    } while (currentNode < (1u<<8));
+
+
+    for(int node = 0; node < 8; node++) {
+        int createdChild = FALSE;
+        if(nodes & (1u<<node)){
+            switch (node) {
+                case 0:
+                    //createdChild = createChildIfItDoesntExist(n, a);
+                    #ifdef DEBUG_PROC_SUBTREE
+                                    //printf("depth=%u: current node = %d, child index = %u, created child = %s\n", depth, currentNode, a, (createdChild ? "TRUE" : "FALSE"));
+                    #endif
+                    proc_subtree(tx0, ty0, tz0, txm, tym, tzm, depth + 1, createdChild, n->children[a], n, a, a, r);
+                    currentNode = new_node(txm, 4, tym, 2, tzm, 1);
+                    #ifdef DEBUG_PROC_SUBTREE
+                                    printf("depth=%u: previous node = 0, new_node = %d\n", depth, currentNode);
+                    #endif
+                    break;
+
+                case 1:
+                    //createdChild = createChildIfItDoesntExist(n, 1u^a);
+                    #ifdef DEBUG_PROC_SUBTREE
+                                    //printf("depth=%u: current node = %d, child index = %u, created child = %s\n", depth, currentNode, 1u^a, (createdChild ? "TRUE" : "FALSE"));
+                    #endif
+                    proc_subtree(tx0, ty0, tzm, txm, tym, tz1, depth + 1, createdChild, n->children[1u^a], n, 1u^a, a, r);
+                    currentNode = new_node(txm, 5, tym, 3, tz1, 8);
+                    #ifdef DEBUG_PROC_SUBTREE
+                                    printf("depth=%u: previous node = 1, new_node = %d\n", depth, currentNode);
+                    #endif
+                    break;
+
+                case 2:
+                    //createdChild = createChildIfItDoesntExist(n, 2u^a);
+                    #ifdef DEBUG_PROC_SUBTREE
+                                    //printf("depth=%u: current node = %d, child index = %u, created child = %s\n", depth, currentNode, 2u^a, (createdChild ? "TRUE" : "FALSE"));
+                    #endif
+                    proc_subtree(tx0, tym, tz0, txm, ty1, tzm, depth + 1, createdChild, n->children[2u^a], n, 2u^a, a, r);
+                    currentNode = new_node(txm, 6, ty1, 8, tzm, 3);
+                    #ifdef DEBUG_PROC_SUBTREE
+                                    printf("depth=%u: previous node = 2, new_node = %d\n", depth, currentNode);
+                    #endif
+                    break;
+
+                case 3:
+                    //createdChild = createChildIfItDoesntExist(n, 3u^a);
+                    #ifdef DEBUG_PROC_SUBTREE
+                                    //printf("depth=%u: current node = %d, child index = %u, created child = %s\n", depth, currentNode, 3u^a, (createdChild ? "TRUE" : "FALSE"));
+                    #endif
+                    proc_subtree(tx0, tym, tzm, txm, ty1, tz1, depth + 1, createdChild, n->children[3u^a], n, 3u^a, a, r);
+                    currentNode = new_node(txm, 7, ty1, 8, tz1, 8);
+                    #ifdef DEBUG_PROC_SUBTREE
+                                    printf("depth=%u: previous node = 3, new_node = %d\n", depth, currentNode);
+                    #endif
+                    break;
+
+                case 4:
+                    //createdChild = createChildIfItDoesntExist(n, 4u^a);
+                    #ifdef DEBUG_PROC_SUBTREE
+                                    //printf("depth=%u: current node = %d, child index = %u, created child = %s\n", depth, currentNode, 4u^a, (createdChild ? "TRUE" : "FALSE"));
+                    #endif
+                    proc_subtree(txm, ty0, tz0, tx1, tym, tzm, depth + 1, createdChild, n->children[4u^a], n, 4u^a, a, r);
+                    currentNode = new_node(tx1, 8, tym, 6, tzm, 5);
+                    #ifdef DEBUG_PROC_SUBTREE
+                                    printf("depth=%u: previous node = 4, new_node = %d\n", depth, currentNode);
+                    #endif
+                    break;
+
+                case 5:
+                    //createdChild = createChildIfItDoesntExist(n, 5u^a);
+                    #ifdef DEBUG_PROC_SUBTREE
+                                    //printf("depth=%u: current node = %d, child index = %u, created child = %s\n", depth, currentNode, 5u^a, (createdChild ? "TRUE" : "FALSE"));
+                    #endif
+                    proc_subtree(txm, ty0, tzm, tx1, tym, tz1, depth + 1, createdChild, n->children[5u^a], n, 5u^a, a, r);
+                    currentNode = new_node(tx1, 8, tym, 7, tz1, 8);
+                    #ifdef DEBUG_PROC_SUBTREE
+                                    printf("depth=%u: previous node = 5, new_node = %d\n", depth, currentNode);
+                    #endif
+                    break;
+
+                case 6:
+                    //createdChild = createChildIfItDoesntExist(n, 6u^a);
+                    #ifdef DEBUG_PROC_SUBTREE
+                                    //printf("depth=%u: current node = %d, child index = %u, created child = %s\n", depth, currentNode, 6u^a, (createdChild ? "TRUE" : "FALSE"));
+                    #endif
+                    proc_subtree(txm, tym, tz0, tx1, ty1, tzm, depth + 1, createdChild, n->children[6u^a], n, 6u^a, a, r);
+                    currentNode = new_node(tx1, 8, ty1, 8, tzm, 7);
+                    #ifdef DEBUG_PROC_SUBTREE
+                                    printf("depth=%u: previous node = 6, new_node = %d\n", depth, currentNode);
+                    #endif
+                    break;
+
+                case 7:
+                    //createdChild = createChildIfItDoesntExist(n, 7u^a);
+                    #ifdef DEBUG_PROC_SUBTREE
+                                    //printf("depth=%u: current node = %d, child index = %u, created child = %s\n", depth, currentNode, 7u^a, (createdChild ? "TRUE" : "FALSE"));
+                    #endif
+                    proc_subtree(txm, tym, tzm, tx1, ty1, tz1, depth + 1, createdChild, n->children[7u^a], n, 7u^a, a, r);
+                    currentNode = 8;
+                    #ifdef DEBUG_PROC_SUBTREE
+                                    printf("depth=%u: previous node = 7, new_node = %d\n", depth, currentNode);
+                    #endif
+                    break;
+
+                default:
+                    assert(0);
+            }
+        }
+    }
 
 #ifdef DEBUG_PROC_SUBTREE
     double previousOdds = n->logOdds;
