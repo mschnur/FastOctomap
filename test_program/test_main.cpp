@@ -9,7 +9,7 @@
 
 #include "FastOctree.h"
 
-#define INSERT_RAY_BY_RAY 0
+#define INSERT_RAY_BY_RAY 1
 
 void printUsage(const char* self)
 {
@@ -79,7 +79,7 @@ int main(int argc, char** argv)
         gettimeofday(&stop, NULL);  // start time
 #if !INSERT_RAY_BY_RAY
 		std::stringstream filenameStream;
-		filenameStream << "octomap_nodes_after_pointcloud_" << currentScan << ".csv";
+		filenameStream << "conv_octomap_nodes_after_pointcloud_" << currentScan << ".csv";
 		makeOctomapNodeCsv(filenameStream.str(), *tree);
 #endif
 
@@ -102,11 +102,11 @@ int main(int argc, char** argv)
 #if INSERT_RAY_BY_RAY
 				tree->insertRay((*scan_it)->pose.trans(), pt);
 				std::stringstream filenameStream;
-				filenameStream << "octomap_nodes_after_pointcloud_" << currentScan << "_point_" << i << ".csv";
+				filenameStream << "conv_octomap_nodes_after_pointcloud_" << currentScan << "_point_" << i << ".csv";
 				makeOctomapNodeCsv(filenameStream.str(), *tree);
 
 				std::stringstream fastOctreeFilenameStream;
-				fastOctreeFilenameStream << "FastOctree_nodes_after_pointcloud_" << currentScan << "_point_" << i << ".csv";
+				fastOctreeFilenameStream << "conv_FastOctree_nodes_after_pointcloud_" << currentScan << "_point_" << i << ".csv";
 				insertPointCloud(&fastOctree, &(pointsBuffer[i]), 1, &sensorOrigin);
 				createNodeCsv(&fastOctree, fastOctreeFilenameStream.str().c_str());
 #endif
@@ -115,7 +115,7 @@ int main(int argc, char** argv)
 			insertPointCloud(&fastOctree, pointsBuffer, numPoints, &sensorOrigin);
 
 			std::stringstream fastOctreeFilenameStream;
-			fastOctreeFilenameStream << "FastOctree_nodes_after_pointcloud_" << currentScan << ".csv";
+			fastOctreeFilenameStream << "conv_FastOctree_nodes_after_pointcloud_" << currentScan << ".csv";
 
 			createNodeCsv(&fastOctree, fastOctreeFilenameStream.str().c_str());
 #endif
