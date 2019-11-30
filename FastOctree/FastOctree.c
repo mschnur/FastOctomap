@@ -225,6 +225,16 @@ int new_node(double txm, int x, double tym, int y, double tzm, int z)
     return (int)currentNode;
 }
 
+static inline long long compute_valid_node(double t1,double t2,double t3, double tx1, double ty1, double tz1){
+    return (long long)(*((unsigned long long*)(&t1)) 
+                        & *((unsigned long long*)(&t2))
+                        & *((unsigned long long*)(&t3))
+                        & ~*((unsigned long long*)(&tx1))
+                        & ~*((unsigned long long*)(&ty1))
+                        & ~*((unsigned long long*)(&tz1))
+                        & 0x8000000000000000)>>63;
+}
+
 
 void proc_subtree(double tx0, double ty0, double tz0,
                   double tx1, double ty1, double tz1,
@@ -242,28 +252,9 @@ void proc_subtree(double tx0, double ty0, double tz0,
            depth, a, (justCreated ? "TRUE" : "FALSE"), r->t_end, tx0, ty0, tz0, tx1, ty1, tz1);
 #endif
 
-    double txm, tym, tzm;
-    int currentNode = 0;
-
-    if (tx1 < 0.0 || ty1 < 0.0 || tz1 < 0.0)
+    
+    if (n == NULL && parent != NULL)
     {
-#ifdef DEBUG_PROC_SUBTREE
-        printf("tx1, ty1, or tz1 is negative; returning\n");
-#endif
-        return;
-    }
-    else if (n == NULL && parent != NULL)
-    {
-        if (any_is_less(r->t_end, r->t_end, r->t_end, tx0, ty0, tz0))
-        {
-#ifdef DEBUG_PROC_SUBTREE
-            printf("r->t_end is less than at least one of tx0, ty0, and tz0; returning\n");
-#endif
-            // The ray endpoint happened before at least one of the minimum t values of this subtree, meaning the ray
-            // ends before this subtree. Therefore, we don't want to do anything to this subtree.
-            return;
-        }
-
         justCreated = createChildIfItDoesntExist(parent, childIndex);
         n = parent->children[childIndex];
 #ifdef DEBUG_PROC_SUBTREE
@@ -340,6 +331,14 @@ void proc_subtree(double tx0, double ty0, double tz0,
         }
     }
 
+    double txm, tym, tzm;
+    int currentNode = 0;
+
+    double t1,t2,t3;
+    int eq;
+    long long valid_node;
+    unsigned char nodes = 0;
+
     txm = 0.5 * (tx0 + tx1);
     tym = 0.5 * (ty0 + ty1);
     tzm = 0.5 * (tz0 + tz1);
@@ -375,20 +374,14 @@ void proc_subtree(double tx0, double ty0, double tz0,
     printf("depth=%u: first_node: %d\n", depth, currentNode);
 #endif
 
-    unsigned char nodes = 0;
     currentNode = 1u<<currentNode;
-
-    double t1,t2,t3;
-    int eq;
-    long long valid_node;
-
 
     eq = ~(((1<<0) - currentNode)>>31);
     //this should compute if the currentNode is valid.
     t1 = tx0 - r->t_end;
     t2 = ty0 - r->t_end;
     t3 = tz0 - r->t_end;
-    valid_node = (long long)(*((unsigned long long*)(&t1)) & *((unsigned long long*)(&t2)) & *((unsigned long long*)(&t3)) & 0x8000000000000000)>>63;
+    valid_node = compute_valid_node(t1,t2,t3,txm,tym,tzm);
     nodes |= currentNode & valid_node & eq;
     currentNode = (new_node(txm, 4, tym, 2, tzm, 1) & eq) | (currentNode & ~eq);
 
@@ -396,7 +389,7 @@ void proc_subtree(double tx0, double ty0, double tz0,
     t1 = tx0 - r->t_end;
     t2 = ty0 - r->t_end;
     t3 = tzm - r->t_end;
-    valid_node = (long long)(*((unsigned long long*)(&t1)) & *((unsigned long long*)(&t2)) & *((unsigned long long*)(&t3)) & 0x8000000000000000)>>63;
+    valid_node = compute_valid_node(t1,t2,t3,txm,tym,tz1);
     nodes |= currentNode & valid_node & eq;
     currentNode = (new_node(txm, 5, tym, 3, tz1, 8) & eq) | (currentNode & ~eq);
 
@@ -404,7 +397,7 @@ void proc_subtree(double tx0, double ty0, double tz0,
     t1 = tx0 - r->t_end;
     t2 = tym - r->t_end;
     t3 = tz0 - r->t_end;
-    valid_node = (long long)(*((unsigned long long*)(&t1)) & *((unsigned long long*)(&t2)) & *((unsigned long long*)(&t3)) & 0x8000000000000000)>>63;
+    valid_node = compute_valid_node(t1,t2,t3,txm,ty1,tzm);
     nodes |= currentNode & valid_node & eq;
     currentNode = (new_node(txm, 6, ty1, 8, tzm, 3) & eq) | (currentNode & ~eq);
 
@@ -412,7 +405,7 @@ void proc_subtree(double tx0, double ty0, double tz0,
     t1 = tx0 - r->t_end;
     t2 = tym - r->t_end;
     t3 = tzm - r->t_end;
-    valid_node = (long long)(*((unsigned long long*)(&t1)) & *((unsigned long long*)(&t2)) & *((unsigned long long*)(&t3)) & 0x8000000000000000)>>63;
+    valid_node = compute_valid_node(t1,t2,t3,txm,ty1,tz1);
     nodes |= currentNode & valid_node & eq;
     currentNode = (new_node(txm, 7, ty1, 8, tz1, 8) & eq) | (currentNode & ~eq);
 
@@ -420,7 +413,7 @@ void proc_subtree(double tx0, double ty0, double tz0,
     t1 = txm - r->t_end;
     t2 = ty0 - r->t_end;
     t3 = tz0 - r->t_end;
-    valid_node = (long long)(*((unsigned long long*)(&t1)) & *((unsigned long long*)(&t2)) & *((unsigned long long*)(&t3)) & 0x8000000000000000)>>63;
+    valid_node = compute_valid_node(t1,t2,t3,tx1,tym,tzm);
     nodes |= currentNode & valid_node & eq;
     currentNode = (new_node(tx1, 8, tym, 6, tzm, 5) & eq) | (currentNode & ~eq);
 
@@ -428,7 +421,7 @@ void proc_subtree(double tx0, double ty0, double tz0,
     t1 = txm - r->t_end;
     t2 = ty0 - r->t_end;
     t3 = tzm - r->t_end;
-    valid_node = (long long)(*((unsigned long long*)(&t1)) & *((unsigned long long*)(&t2)) & *((unsigned long long*)(&t3)) & 0x8000000000000000)>>63;
+    valid_node = compute_valid_node(t1,t2,t3,tx1,tym,tz1);
     nodes |= currentNode & valid_node & eq;
     currentNode = (new_node(tx1, 8, tym, 7, tz1, 8) & eq) | (currentNode & ~eq);
 
@@ -436,7 +429,7 @@ void proc_subtree(double tx0, double ty0, double tz0,
     t1 = txm - r->t_end;
     t2 = tym - r->t_end;
     t3 = tz0 - r->t_end;
-    valid_node = (long long)(*((unsigned long long*)(&t1)) & *((unsigned long long*)(&t2)) & *((unsigned long long*)(&t3)) & 0x8000000000000000)>>63;
+    valid_node = compute_valid_node(t1,t2,t3,tx1,ty1,tzm);
     nodes |= currentNode & valid_node & eq;
     currentNode = (new_node(tx1, 8, ty1, 8, tzm, 7) & eq) | (currentNode & ~eq);
 
@@ -444,7 +437,7 @@ void proc_subtree(double tx0, double ty0, double tz0,
     t1 = txm - r->t_end;
     t2 = tym - r->t_end;
     t3 = tzm - r->t_end;
-    valid_node = (long long)(*((unsigned long long*)(&t1)) & *((unsigned long long*)(&t2)) & *((unsigned long long*)(&t3)) & 0x8000000000000000)>>63;
+    valid_node = compute_valid_node(t1,t2,t3,tx1,ty1,tz1);
     nodes |= currentNode & valid_node & eq;
 
     for(int node = 0; node < 8; node++) {
