@@ -1,6 +1,34 @@
 #include <stdio.h>
 
-unsigned char first_node_one(double tx0, double ty0, double tz0, double txm, double tym, double tzm){
+int first_node(double tx0, double ty0, double tz0, double txm, double tym, double tzm)
+{
+    unsigned char answer = 0;	// initialize to 00000000
+    // select the entry plane and set bits
+    if(tx0 > ty0)
+    {
+        if(tx0 > tz0)
+        {   // PLANE YZ
+            if(tym < tx0) answer|=2u;	// set bit at position 1
+            if(tzm < tx0) answer|=1u;	// set bit at position 0
+            return (int) answer;
+        }
+    }
+    else
+    {
+        if(ty0 > tz0)
+        { // PLANE XZ
+            if(txm < ty0) answer|=4u;	// set bit at position 2
+            if(tzm < ty0) answer|=1u;	// set bit at position 0
+            return (int) answer;
+        }
+    }
+    // PLANE XY
+    if(txm < tz0) answer|=4u;	// set bit at position 2
+    if(tym < tz0) answer|=2u;	// set bit at position 1
+    return (int) answer;
+}
+
+int first_node_one(double tx0, double ty0, double tz0, double txm, double tym, double tzm){
     unsigned char currentNode = 0;
     
     // select the entry plane and set bits
@@ -23,7 +51,7 @@ unsigned char first_node_one(double tx0, double ty0, double tz0, double txm, dou
     return currentNode;
 }
 
-unsigned char first_node_two(double tx0, double ty0, double tz0, double txm, double tym, double tzm){
+int first_node_two(double tx0, double ty0, double tz0, double txm, double tym, double tzm){
     unsigned long long currentNode = 0;
     
     // select the entry plane and set bits
@@ -90,9 +118,25 @@ unsigned int new_node_two(double txm, double tym, double tzm, unsigned char x, u
 
 
 int main(){
-    unsigned char answer1 = 0, answer2 = 0;
+    int answer,answer1,answer2;
     double tx0,ty0,tz0,txm,tym,tzm;
 
+
+    tx0 = -3196.9569552045646;
+    ty0 = -1954.8123974311923;
+    tz0 = -8804.1823021764267;
+
+    txm = 2.9360268413120139;
+    tym = -1.1065446904973442;
+    tzm = 7.8100210643833634;
+
+    answer = first_node(tx0,ty0,tz0,txm,tym,tzm);
+    answer1 = first_node_one(tx0,ty0,tz0,txm,tym,tzm);
+    answer2 = first_node_two(tx0,ty0,tz0,txm,tym,tzm);
+
+    printf("%d:%d:%d\n", answer,answer1,answer2);
+
+    /*
     //first_node tests
     printf("first_node tests\n");
     {
@@ -225,5 +269,6 @@ int main(){
         }
 
     }
+    */
 
 }

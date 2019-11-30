@@ -199,6 +199,35 @@ int first_node(double tx0, double ty0, double tz0, double txm, double tym, doubl
     return (int) answer;
 }
 
+int first_node_two(double tx0, double ty0, double tz0, double txm, double tym, double tzm){
+    unsigned long long currentNode = 0;
+    
+    // select the entry plane and set bits
+    
+    double tmp1 = ty0 - tx0;
+    double tmp2 = tz0 - tx0;
+    double tmp3 = tym - tx0;
+    double tmp4 = tzm - tx0;
+
+    double tmp5 = tz0 - ty0;
+    double tmp6 = txm - ty0;
+    double tmp7 = tzm - ty0;
+
+    double tmp8 = txm - tz0;
+    double tmp9 = tym - tz0;
+
+    currentNode |= (unsigned long long)(*((unsigned long long*)(&tmp1)) & *((unsigned long long*)(&tmp2)) & *((unsigned long long*)(&tmp3)) & 0x8000000000000000)>>62;
+    currentNode |= (unsigned long long)(*((unsigned long long*)(&tmp1)) & *((unsigned long long*)(&tmp2)) & *((unsigned long long*)(&tmp4)) & 0x8000000000000000)>>63;
+
+    currentNode |= (unsigned long long)(~*((unsigned long long*)(&tmp1)) & *((unsigned long long*)(&tmp5)) & *((unsigned long long*)(&tmp6)) & 0x8000000000000000)>>61;
+    currentNode |= (unsigned long long)(~*((unsigned long long*)(&tmp1)) & *((unsigned long long*)(&tmp5)) & *((unsigned long long*)(&tmp7)) & 0x8000000000000000)>>63;
+
+    currentNode |= (unsigned long long)(~*((unsigned long long*)(&tmp1)) & ~*((unsigned long long*)(&tmp5)) & *((unsigned long long*)(&tmp8)) & 0x8000000000000000)>>61;
+    currentNode |= (unsigned long long)(~*((unsigned long long*)(&tmp1)) & ~*((unsigned long long*)(&tmp5)) & *((unsigned long long*)(&tmp9)) & 0x8000000000000000)>>62;
+
+    return (int)currentNode;
+}
+
 
 int new_node(double txm, int x, double tym, int y, double tzm, int z)
 {
@@ -280,6 +309,8 @@ void proc_subtree(double tx0, double ty0, double tz0,
     tzm = 0.5 * (tz0 + tz1);
 
     currentNode = first_node(tx0, ty0, tz0, txm, tym, tzm);
+    int currentNode2 = first_node_two(tx0, ty0, tz0, txm, tym, tzm);
+
     do
     {
         switch (currentNode)
