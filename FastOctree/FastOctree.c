@@ -262,7 +262,7 @@ void proc_subtree(double tx0, double ty0, double tz0,
 #endif
 
     double txm, tym, tzm;
-    int currentNode;
+    int currentNode = 0;
 
     if (tx1 < 0.0 || ty1 < 0.0 || tz1 < 0.0)
     {
@@ -376,7 +376,28 @@ void proc_subtree(double tx0, double ty0, double tz0,
     printf("txm = %lf, tym = %lf, tzm = %lf\n", txm, tym, tzm);
 #endif
 
-    currentNode = first_node(tx0, ty0, tz0, txm, tym, tzm);
+    double tmp1 = ty0 - tx0;
+    double tmp2 = tz0 - tx0;
+    double tmp3 = tym - tx0;
+    double tmp4 = tzm - tx0;
+
+    double tmp5 = tz0 - ty0;
+    double tmp6 = txm - ty0;
+    double tmp7 = tzm - ty0;
+
+    double tmp8 = txm - tz0;
+    double tmp9 = tym - tz0;
+
+
+    currentNode |= (int)((unsigned long long)(*((unsigned long long*)(&tmp1)) & *((unsigned long long*)(&tmp2)) & *((unsigned long long*)(&tmp3)) & 0x8000000000000000)>>62);
+    currentNode |= (int)((unsigned long long)(*((unsigned long long*)(&tmp1)) & *((unsigned long long*)(&tmp2)) & *((unsigned long long*)(&tmp4)) & 0x8000000000000000)>>63);
+
+    currentNode |= (int)((unsigned long long)(~*((unsigned long long*)(&tmp1)) & *((unsigned long long*)(&tmp5)) & *((unsigned long long*)(&tmp6)) & 0x8000000000000000)>>61);
+    currentNode |= (int)((unsigned long long)(~*((unsigned long long*)(&tmp1)) & *((unsigned long long*)(&tmp5)) & *((unsigned long long*)(&tmp7)) & 0x8000000000000000)>>63);
+
+    currentNode |= (int)((unsigned long long)(~*((unsigned long long*)(&tmp2)) & ~*((unsigned long long*)(&tmp5)) & *((unsigned long long*)(&tmp8)) & 0x8000000000000000)>>61);
+    currentNode |= (int)((unsigned long long)(~*((unsigned long long*)(&tmp2)) & ~*((unsigned long long*)(&tmp5)) & *((unsigned long long*)(&tmp9)) & 0x8000000000000000)>>62);
+
 
 #ifdef DEBUG_PROC_SUBTREE
     printf("depth=%u: first_node: %d\n", depth, currentNode);
