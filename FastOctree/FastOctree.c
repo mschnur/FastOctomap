@@ -385,7 +385,7 @@ void proc_subtree(double tx0, double ty0, double tz0,
 #endif
 
     unsigned char nodes = 0;
-    currentNode |= 1<<currentNode;
+    currentNode = 1u<<currentNode;
 
 
     int eq = ~(((1<<0) - currentNode)>>31);
@@ -418,7 +418,6 @@ void proc_subtree(double tx0, double ty0, double tz0,
 
     eq = ~(((1<<7) - currentNode)>>31);
     nodes |= currentNode & eq;
-
 
     for(int node = 0; node < 8; node++) {
         int createdChild = FALSE;
