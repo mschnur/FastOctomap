@@ -388,51 +388,40 @@ void proc_subtree(double tx0, double ty0, double tz0,
     nodes |= 1u<<currentNode;
     currentNode = nodes;
 
-    do {
-        switch (currentNode) {
-            case (1u<<0):
-                currentNode = new_node(txm, 4, tym, 2, tzm, 1);
-                nodes |= currentNode;
-                break;
+    if(currentNode == (1u<<0)) {
+        currentNode = new_node(txm, 4, tym, 2, tzm, 1);
+        nodes |= currentNode;
+    }
 
-            case (1u<<1):
-                currentNode = new_node(txm, 5, tym, 3, tz1, 8);
-                nodes |= currentNode;
-                break;
+    if(currentNode == (1u<<1)) {
+        currentNode = new_node(txm, 5, tym, 3, tz1, 8);
+        nodes |= currentNode;
+    }
 
-            case (1u<<2):
-                currentNode = new_node(txm, 6, ty1, 8, tzm, 3);
-                nodes |= currentNode;
-                break;
+    if(currentNode == (1u<<2)) {
+        currentNode = new_node(txm, 6, ty1, 8, tzm, 3);
+        nodes |= currentNode;
+    }
 
-            case (1u<<3):
-                currentNode = new_node(txm, 7, ty1, 8, tz1, 8);
-                nodes |= currentNode;
-                break;
+    if(currentNode == (1u<<3)) {
+        currentNode = new_node(txm, 7, ty1, 8, tz1, 8);
+        nodes |= currentNode;
+    }
 
-            case (1u<<4):
-                currentNode = new_node(tx1, 8, tym, 6, tzm, 5);
-                nodes |= currentNode;
-                break;
+    if(currentNode == (1u<<4)) {
+        currentNode = new_node(tx1, 8, tym, 6, tzm, 5);
+        nodes |= currentNode;
+    }
 
-            case (1u<<5):
-                currentNode = new_node(tx1, 8, tym, 7, tz1, 8);
-                nodes |= currentNode;
-                break;
+    if(currentNode == (1u<<5)) {
+        currentNode = new_node(tx1, 8, tym, 7, tz1, 8);
+        nodes |= currentNode;
+    }
 
-            case (1u<<6):
-                currentNode = new_node(tx1, 8, ty1, 8, tzm, 7);
-                nodes |= currentNode;
-                break;
-
-            case (1u<<7):
-                currentNode = (1u<<8);
-                break;
-
-            default:
-                assert(0);
-        }
-    } while (currentNode < (1u<<8));
+    if(currentNode == (1u<<6)) {
+        currentNode = new_node(tx1, 8, ty1, 8, tzm, 7);
+        nodes |= currentNode;
+    }
 
 
     for(int node = 0; node < 8; node++) {
