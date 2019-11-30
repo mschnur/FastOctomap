@@ -9,6 +9,8 @@
 
 #include "FastOctree.h"
 
+#define INSERT_RAY_BY_RAY 0
+
 void printUsage(const char* self)
 {
     std::cerr << "\nUSAGE: " << self << " <InputFile>.log/graph\n\n";
@@ -71,12 +73,15 @@ int main(int argc, char** argv)
 	for (octomap::ScanGraph::iterator scan_it = graph->begin(); scan_it != graph->end(); scan_it++) {
 		timeval start = {}, stop = {};
 		gettimeofday(&start, NULL);  // start timer
+#if !INSERT_RAY_BY_RAY
 		tree->insertPointCloud((*scan_it)->scan, (*scan_it)->pose.trans());
+#endif
         gettimeofday(&stop, NULL);  // start time
-		
+#if !INSERT_RAY_BY_RAY
 		std::stringstream filenameStream;
 		filenameStream << "octomap_nodes_after_pointcloud_" << currentScan << ".csv";
 		makeOctomapNodeCsv(filenameStream.str(), *tree);
+#endif
 
 		{
 			Vector3d sensorOrigin = {};
@@ -90,7 +95,7 @@ int main(int argc, char** argv)
 				const octomap::point3d& pt = (*scan_it)->scan->getPoint(i);
 				initVector3d(&(pointsBuffer[i]), pt.x(), pt.y(), pt.z());
 
-				/*
+#if INSERT_RAY_BY_RAY
 				tree->insertRay((*scan_it)->pose.trans(), pt);
 				std::stringstream filenameStream;
 				filenameStream << "octomap_nodes_after_pointcloud_" << currentScan << "_point_" << i << ".csv";
@@ -105,15 +110,16 @@ int main(int argc, char** argv)
 				fastOctreePostPruneFilenameStream << "FastOctree_postprune_nodes_after_pointcloud_" << currentScan << "_point_" << i << ".csv";
 				pruneTree(&fastOctree);
 				createNodeCsv(&fastOctree, fastOctreePostPruneFilenameStream.str().c_str());
-				*/
+#endif
 			}
-
+#if !INSERT_RAY_BY_RAY
 			insertPointCloud(&fastOctree, pointsBuffer, numPoints, &sensorOrigin);
 
 			std::stringstream fastOctreeFilenameStream;
 			fastOctreeFilenameStream << "FastOctree_nodes_after_pointcloud_" << currentScan << ".csv";
 
 			createNodeCsv(&fastOctree, fastOctreeFilenameStream.str().c_str());
+#endif
 		}
 		
        
