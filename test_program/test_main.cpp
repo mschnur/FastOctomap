@@ -106,14 +106,9 @@ int main(int argc, char** argv)
 				makeOctomapNodeCsv(filenameStream.str(), *tree);
 
 				std::stringstream fastOctreeFilenameStream;
-				fastOctreeFilenameStream << "FastOctree_preprune_nodes_after_pointcloud_" << currentScan << "_point_" << i << ".csv";
+				fastOctreeFilenameStream << "FastOctree_nodes_after_pointcloud_" << currentScan << "_point_" << i << ".csv";
 				insertPointCloud(&fastOctree, &(pointsBuffer[i]), 1, &sensorOrigin);
 				createNodeCsv(&fastOctree, fastOctreeFilenameStream.str().c_str());
-
-				std::stringstream fastOctreePostPruneFilenameStream;
-				fastOctreePostPruneFilenameStream << "FastOctree_postprune_nodes_after_pointcloud_" << currentScan << "_point_" << i << ".csv";
-				pruneTree(&fastOctree);
-				createNodeCsv(&fastOctree, fastOctreePostPruneFilenameStream.str().c_str());
 #endif
 			}
 #if !INSERT_RAY_BY_RAY
