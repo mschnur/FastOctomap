@@ -104,6 +104,7 @@ static inline void createChild(Node* n, unsigned int childIndex)
     // initializes the memory to zero, which means that the this new node's `children` array will be filled with
     // zeros (which is equivalent to filling it will NULL pointers).
     n->children[childIndex] = (Node*) calloc(1, sizeof(Node));
+    n->children[childIndex]->logOdds = n->logOdds;
 }
 
 static inline void createChildIfItDoesntExist(Node* n, unsigned int childIndex)
