@@ -9,7 +9,7 @@
 
 #include "FastOctree.h"
 
-#define INSERT_RAY_BY_RAY 0
+#define INSERT_RAY_BY_RAY 1
 
 void printUsage(const char* self)
 {
@@ -89,10 +89,11 @@ int main(int argc, char** argv)
 			initVector3d(&sensorOrigin, sensorOriginOctomap.x(), sensorOriginOctomap.y(), sensorOriginOctomap.z());
 
 			static Vector3d pointsBuffer[300000] = {};
-#if INSERT_RAY_BY_RAY
+#if !INSERT_RAY_BY_RAY
 			size_t numPoints = (*scan_it)->scan->size();
 #else
-			size_t numPoints = 10;
+			size_t numPoints = (*scan_it)->scan->size();
+			if(numPoints > 10) numPoints = 10;
 #endif
 			for (size_t i = 0; i < numPoints; ++i)
 			{
