@@ -106,15 +106,12 @@ static inline void createChild(Node* n, unsigned int childIndex)
     n->children[childIndex] = (Node*) calloc(1, sizeof(Node));
 }
 
-static inline int createChildIfItDoesntExist(Node* n, unsigned int childIndex)
+static inline void createChildIfItDoesntExist(Node* n, unsigned int childIndex)
 {
     if (n->children[childIndex] == NO_CHILD)
     {
         createChild(n, childIndex);
-        return TRUE;
     }
-
-    return FALSE;
 }
 
 static inline double maxChildLogLikelihood(const Node* n)
@@ -238,97 +235,70 @@ static inline long long compute_valid_node(double t1,double t2,double t3, double
 
 void proc_subtree(double tx0, double ty0, double tz0,
                   double tx1, double ty1, double tz1,
-                  unsigned int depth, int justCreated,
-                  Node* n, Node *parent, unsigned char childIndex, unsigned char a, Ray* r)
-{
-#ifdef DEBUG_TRACE_FUNCTION_CALLS
-    //printf("proc_subtree, depth=%u\n", depth);
-#endif
+                  unsigned int depth,
+                  Node* n, unsigned char a, Ray* r) {
+    #ifdef DEBUG_TRACE_FUNCTION_CALLS
+        //printf("proc_subtree, depth=%u\n", depth);
+    #endif
 
-#ifdef DEBUG_PROC_SUBTREE
-    printf("proc_subtree called with depth = %u, a = %u, justCreated = %s, r->t_end = %lf\n"
-           "                         tx0 = %lf, ty0 = %lf, tz0 = %lf,\n"
-           "                         tx1 = %lf, ty1 = %lf, tz1 = %lf\n",
-           depth, a, (justCreated ? "TRUE" : "FALSE"), r->t_end, tx0, ty0, tz0, tx1, ty1, tz1);
-#endif
+    #ifdef DEBUG_PROC_SUBTREE
+        printf("proc_subtree called with depth = %u, a = %u, justCreated = %s, r->t_end = %lf\n"
+            "                         tx0 = %lf, ty0 = %lf, tz0 = %lf,\n"
+            "                         tx1 = %lf, ty1 = %lf, tz1 = %lf\n",
+            depth, a, (justCreated ? "TRUE" : "FALSE"), r->t_end, tx0, ty0, tz0, tx1, ty1, tz1);
+    #endif
 
     
-    if (n == NULL && parent != NULL)
-    {
-        justCreated = createChildIfItDoesntExist(parent, childIndex);
-        n = parent->children[childIndex];
-#ifdef DEBUG_PROC_SUBTREE
-        printf("depth=%u: This node is the child with the index = %u, just created this node = %s\n",
-                depth, childIndex, (justCreated ? "TRUE" : "FALSE"));
-#endif
-    }
+    if (depth == MAX_DEPTH) {
+        #ifdef DEBUG_PROC_SUBTREE
+                printf("depth is equal to MAX_DEPTH, so updating the log likelihood of this node\n");
+        #endif
 
-    if (!nodeHasAnyChildren(n))
-    {
-        if (depth == MAX_DEPTH)
-        {
-#ifdef DEBUG_PROC_SUBTREE
-            printf("depth is equal to MAX_DEPTH, so updating the log likelihood of this node\n");
-#endif
+        double logLikelihoodUpdate = 0.0;
 
-            double logLikelihoodUpdate = 0.0;
-
-            if (any_is_greater(r->t_end, r->t_end, r->t_end, tx1, ty1, tz1))
-            {
-#ifdef DEBUG_PROC_SUBTREE
-                printf("r->t_end is greater than any of tx1, ty1, and tz1; voting a MISS\n");
-#endif
-                // The ray endpoint does not occur in this subtree, but the ray passes through this subtree on its
-                // way to the endpoint, and we're at our maximum depth. Therefore we need to give this node a vote
-                // that it is free space.
-                logLikelihoodUpdate = PROB_MISS_LOG;
-            }
-            else
-            {
-#ifdef DEBUG_PROC_SUBTREE
-                printf("r->t_end is NOT greater than any of tx1, ty1, and tz1; voting a HIT\n");
-#endif
-                // The ray endpoint occurs within this subtree, and we're at our maximum depth. Therefore we need to
-                // give this node a vote that it is free space.
-                logLikelihoodUpdate = PROB_HIT_LOG;
-            }
-
-#ifdef DEBUG_PROC_SUBTREE
-            double previousLogOdds = n->logOdds;
-#endif
-
-            // Do the update
-            n->logOdds += logLikelihoodUpdate;
-
-#ifdef DEBUG_PROC_SUBTREE
-            printf("Log-odds update changes log-odds from %lf to %lf\n",
-                    previousLogOdds, n->logOdds);
-            double preClampLogOdds = n->logOdds;
-#endif
-
-            // Clamp the logOdds between the min/max
-            n->logOdds = fmax(CLAMPING_THRES_MIN, fmin(n->logOdds, CLAMPING_THRES_MAX));
-
-#ifdef DEBUG_PROC_SUBTREE
-            printf("Clamping between bounds changes log-odds from %lf to %lf\n",
-                   preClampLogOdds, n->logOdds);
-#endif
-
-#ifdef DEBUG_PROC_SUBTREE
-            printf("Returning because we've updated the log odds of a node at the max depth\n");
-#endif
-            return;
+        if (any_is_greater(r->t_end, r->t_end, r->t_end, tx1, ty1, tz1)) {
+            #ifdef DEBUG_PROC_SUBTREE
+                        printf("r->t_end is greater than any of tx1, ty1, and tz1; voting a MISS\n");
+            #endif
+            // The ray endpoint does not occur in this subtree, but the ray passes through this subtree on its
+            // way to the endpoint, and we're at our maximum depth. Therefore we need to give this node a vote
+            // that it is free space.
+            logLikelihoodUpdate = PROB_MISS_LOG;
         }
-        else if (!justCreated)
-        {
-#ifdef DEBUG_PROC_SUBTREE
-            printf("Not at our max depth, and this node was not just created, so expanding pruned node\n");
-#endif
-            // Either the ray endpoint occurs within this subtree or the ray passes through this subtree on its way to
-            // the endpoint, but we're not at our maximum depth yet and this is a previously pruned node, so we want to
-            // expand this node and then proceed as normal.
-            expandPrunedNode(n);
+        else {
+            #ifdef DEBUG_PROC_SUBTREE
+                        printf("r->t_end is NOT greater than any of tx1, ty1, and tz1; voting a HIT\n");
+            #endif
+            // The ray endpoint occurs within this subtree, and we're at our maximum depth. Therefore we need to
+            // give this node a vote that it is free space.
+            logLikelihoodUpdate = PROB_HIT_LOG;
         }
+
+        #ifdef DEBUG_PROC_SUBTREE
+                double previousLogOdds = n->logOdds;
+        #endif
+
+        // Do the update
+        n->logOdds += logLikelihoodUpdate;
+
+        #ifdef DEBUG_PROC_SUBTREE
+                printf("Log-odds update changes log-odds from %lf to %lf\n",
+                        previousLogOdds, n->logOdds);
+                double preClampLogOdds = n->logOdds;
+        #endif
+
+        // Clamp the logOdds between the min/max
+        n->logOdds = fmax(CLAMPING_THRES_MIN, fmin(n->logOdds, CLAMPING_THRES_MAX));
+
+        #ifdef DEBUG_PROC_SUBTREE
+                printf("Clamping between bounds changes log-odds from %lf to %lf\n",
+                        preClampLogOdds, n->logOdds);
+        #endif
+
+        #ifdef DEBUG_PROC_SUBTREE
+                printf("Returning because we've updated the log odds of a node at the max depth\n");
+        #endif
+        return;
     }
 
     double txm, tym, tzm;
@@ -343,9 +313,9 @@ void proc_subtree(double tx0, double ty0, double tz0,
     tym = 0.5 * (ty0 + ty1);
     tzm = 0.5 * (tz0 + tz1);
 
-#ifdef DEBUG_PROC_SUBTREE
-    printf("txm = %lf, tym = %lf, tzm = %lf\n", txm, tym, tzm);
-#endif
+    #ifdef DEBUG_PROC_SUBTREE
+        printf("txm = %lf, tym = %lf, tzm = %lf\n", txm, tym, tzm);
+    #endif
 
     double tmp1 = ty0 - tx0;
     double tmp2 = tz0 - tx0;
@@ -370,9 +340,9 @@ void proc_subtree(double tx0, double ty0, double tz0,
     currentNode |= (int)((unsigned long long)(~*((unsigned long long*)(&tmp2)) & ~*((unsigned long long*)(&tmp5)) & *((unsigned long long*)(&tmp9)) & 0x8000000000000000)>>62);
 
 
-#ifdef DEBUG_PROC_SUBTREE
-    printf("depth=%u: first_node: %d\n", depth, currentNode);
-#endif
+    #ifdef DEBUG_PROC_SUBTREE
+        printf("depth=%u: first_node: %d\n", depth, currentNode);
+    #endif
 
     currentNode = 1u<<currentNode;
 
@@ -441,15 +411,14 @@ void proc_subtree(double tx0, double ty0, double tz0,
     nodes |= currentNode & valid_node & eq;
 
     for(int node = 0; node < 8; node++) {
-        int createdChild = FALSE;
         if(nodes & (1u<<node)){
             switch (node) {
                 case 0:
-                    //createdChild = createChildIfItDoesntExist(n, a);
+                    createChildIfItDoesntExist(n, a);
                     #ifdef DEBUG_PROC_SUBTREE
                                     //printf("depth=%u: current node = %d, child index = %u, created child = %s\n", depth, currentNode, a, (createdChild ? "TRUE" : "FALSE"));
                     #endif
-                    proc_subtree(tx0, ty0, tz0, txm, tym, tzm, depth + 1, createdChild, n->children[a], n, a, a, r);
+                    proc_subtree(tx0, ty0, tz0, txm, tym, tzm, depth + 1, n->children[a], a, r);
                     currentNode = new_node(txm, 4, tym, 2, tzm, 1);
                     #ifdef DEBUG_PROC_SUBTREE
                                     printf("depth=%u: previous node = 0, new_node = %d\n", depth, currentNode);
@@ -457,11 +426,11 @@ void proc_subtree(double tx0, double ty0, double tz0,
                     break;
 
                 case 1:
-                    //createdChild = createChildIfItDoesntExist(n, 1u^a);
+                    createChildIfItDoesntExist(n, 1u^a);
                     #ifdef DEBUG_PROC_SUBTREE
                                     //printf("depth=%u: current node = %d, child index = %u, created child = %s\n", depth, currentNode, 1u^a, (createdChild ? "TRUE" : "FALSE"));
                     #endif
-                    proc_subtree(tx0, ty0, tzm, txm, tym, tz1, depth + 1, createdChild, n->children[1u^a], n, 1u^a, a, r);
+                    proc_subtree(tx0, ty0, tzm, txm, tym, tz1, depth + 1, n->children[1u^a], a, r);
                     currentNode = new_node(txm, 5, tym, 3, tz1, 8);
                     #ifdef DEBUG_PROC_SUBTREE
                                     printf("depth=%u: previous node = 1, new_node = %d\n", depth, currentNode);
@@ -469,11 +438,11 @@ void proc_subtree(double tx0, double ty0, double tz0,
                     break;
 
                 case 2:
-                    //createdChild = createChildIfItDoesntExist(n, 2u^a);
+                    createChildIfItDoesntExist(n, 2u^a);
                     #ifdef DEBUG_PROC_SUBTREE
                                     //printf("depth=%u: current node = %d, child index = %u, created child = %s\n", depth, currentNode, 2u^a, (createdChild ? "TRUE" : "FALSE"));
                     #endif
-                    proc_subtree(tx0, tym, tz0, txm, ty1, tzm, depth + 1, createdChild, n->children[2u^a], n, 2u^a, a, r);
+                    proc_subtree(tx0, tym, tz0, txm, ty1, tzm, depth + 1, n->children[2u^a], a, r);
                     currentNode = new_node(txm, 6, ty1, 8, tzm, 3);
                     #ifdef DEBUG_PROC_SUBTREE
                                     printf("depth=%u: previous node = 2, new_node = %d\n", depth, currentNode);
@@ -481,11 +450,11 @@ void proc_subtree(double tx0, double ty0, double tz0,
                     break;
 
                 case 3:
-                    //createdChild = createChildIfItDoesntExist(n, 3u^a);
+                    createChildIfItDoesntExist(n, 3u^a);
                     #ifdef DEBUG_PROC_SUBTREE
                                     //printf("depth=%u: current node = %d, child index = %u, created child = %s\n", depth, currentNode, 3u^a, (createdChild ? "TRUE" : "FALSE"));
                     #endif
-                    proc_subtree(tx0, tym, tzm, txm, ty1, tz1, depth + 1, createdChild, n->children[3u^a], n, 3u^a, a, r);
+                    proc_subtree(tx0, tym, tzm, txm, ty1, tz1, depth + 1, n->children[3u^a], a, r);
                     currentNode = new_node(txm, 7, ty1, 8, tz1, 8);
                     #ifdef DEBUG_PROC_SUBTREE
                                     printf("depth=%u: previous node = 3, new_node = %d\n", depth, currentNode);
@@ -493,11 +462,11 @@ void proc_subtree(double tx0, double ty0, double tz0,
                     break;
 
                 case 4:
-                    //createdChild = createChildIfItDoesntExist(n, 4u^a);
+                    createChildIfItDoesntExist(n, 4u^a);
                     #ifdef DEBUG_PROC_SUBTREE
                                     //printf("depth=%u: current node = %d, child index = %u, created child = %s\n", depth, currentNode, 4u^a, (createdChild ? "TRUE" : "FALSE"));
                     #endif
-                    proc_subtree(txm, ty0, tz0, tx1, tym, tzm, depth + 1, createdChild, n->children[4u^a], n, 4u^a, a, r);
+                    proc_subtree(txm, ty0, tz0, tx1, tym, tzm, depth + 1, n->children[4u^a], a, r);
                     currentNode = new_node(tx1, 8, tym, 6, tzm, 5);
                     #ifdef DEBUG_PROC_SUBTREE
                                     printf("depth=%u: previous node = 4, new_node = %d\n", depth, currentNode);
@@ -505,11 +474,11 @@ void proc_subtree(double tx0, double ty0, double tz0,
                     break;
 
                 case 5:
-                    //createdChild = createChildIfItDoesntExist(n, 5u^a);
+                    createChildIfItDoesntExist(n, 5u^a);
                     #ifdef DEBUG_PROC_SUBTREE
                                     //printf("depth=%u: current node = %d, child index = %u, created child = %s\n", depth, currentNode, 5u^a, (createdChild ? "TRUE" : "FALSE"));
                     #endif
-                    proc_subtree(txm, ty0, tzm, tx1, tym, tz1, depth + 1, createdChild, n->children[5u^a], n, 5u^a, a, r);
+                    proc_subtree(txm, ty0, tzm, tx1, tym, tz1, depth + 1, n->children[5u^a], a, r);
                     currentNode = new_node(tx1, 8, tym, 7, tz1, 8);
                     #ifdef DEBUG_PROC_SUBTREE
                                     printf("depth=%u: previous node = 5, new_node = %d\n", depth, currentNode);
@@ -517,11 +486,11 @@ void proc_subtree(double tx0, double ty0, double tz0,
                     break;
 
                 case 6:
-                    //createdChild = createChildIfItDoesntExist(n, 6u^a);
+                    createChildIfItDoesntExist(n, 6u^a);
                     #ifdef DEBUG_PROC_SUBTREE
                                     //printf("depth=%u: current node = %d, child index = %u, created child = %s\n", depth, currentNode, 6u^a, (createdChild ? "TRUE" : "FALSE"));
                     #endif
-                    proc_subtree(txm, tym, tz0, tx1, ty1, tzm, depth + 1, createdChild, n->children[6u^a], n, 6u^a, a, r);
+                    proc_subtree(txm, tym, tz0, tx1, ty1, tzm, depth + 1, n->children[6u^a], a, r);
                     currentNode = new_node(tx1, 8, ty1, 8, tzm, 7);
                     #ifdef DEBUG_PROC_SUBTREE
                                     printf("depth=%u: previous node = 6, new_node = %d\n", depth, currentNode);
@@ -529,11 +498,11 @@ void proc_subtree(double tx0, double ty0, double tz0,
                     break;
 
                 case 7:
-                    //createdChild = createChildIfItDoesntExist(n, 7u^a);
+                    createChildIfItDoesntExist(n, 7u^a);
                     #ifdef DEBUG_PROC_SUBTREE
                                     //printf("depth=%u: current node = %d, child index = %u, created child = %s\n", depth, currentNode, 7u^a, (createdChild ? "TRUE" : "FALSE"));
                     #endif
-                    proc_subtree(txm, tym, tzm, tx1, ty1, tz1, depth + 1, createdChild, n->children[7u^a], n, 7u^a, a, r);
+                    proc_subtree(txm, tym, tzm, tx1, ty1, tz1, depth + 1, n->children[7u^a], a, r);
                     currentNode = 8;
                     #ifdef DEBUG_PROC_SUBTREE
                                     printf("depth=%u: previous node = 7, new_node = %d\n", depth, currentNode);
@@ -546,15 +515,15 @@ void proc_subtree(double tx0, double ty0, double tz0,
         }
     }
 
-#ifdef DEBUG_PROC_SUBTREE
-    double previousOdds = n->logOdds;
-#endif
-    n->logOdds = maxChildLogLikelihood(n);
+    #ifdef DEBUG_PROC_SUBTREE
+        double previousOdds = n->logOdds;
+    #endif
+        n->logOdds = maxChildLogLikelihood(n);
 
-#ifdef DEBUG_PROC_SUBTREE
-    printf("Making the log-odds of this node equal to the max child log-odds changed the log-odds from %lf to %lf\n",
-            previousOdds, n->logOdds);
-#endif
+    #ifdef DEBUG_PROC_SUBTREE
+        printf("Making the log-odds of this node equal to the max child log-odds changed the log-odds from %lf to %lf\n",
+                previousOdds, n->logOdds);
+    #endif
 }
 
 
@@ -634,7 +603,7 @@ void ray_parameter(Octree* tree, Ray* r) {
 
     if (MAX(MAX(tx0, ty0), tz0) < MIN(MIN(tx1, ty1), tz1))
     {
-        proc_subtree(tx0, ty0, tz0, tx1, ty1, tz1, 0, createdRoot, tree->root, NULL, 0, a, r);
+        proc_subtree(tx0, ty0, tz0, tx1, ty1, tz1, 0, tree->root, a, r);
     }
     else
     {
