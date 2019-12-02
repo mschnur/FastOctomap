@@ -366,8 +366,8 @@ void proc_subtree(double* tx0, double* ty0, double* tz0,
         t3 = tz0[i] - endpoint[i];
         valid_node = compute_valid_node(t1,t2,t3,txm[i],tym[i],tzm[i]);
         tmp_node = (unsigned char)(currentNode & valid_node & eq);
-        nodes[i] |= (tmp_node << a[i]) | (tmp_node >> (-a[i] & 7));
-        cur_index[0] = ((cur_index[0])+1 & valid_node & eq) | (cur_index[0] & valid_node & ~eq);
+        nodes[i] |= tmp_node;//(tmp_node << a[i]) | (tmp_node >> (-a[i] & 7));
+        cur_index[a[i]] += (1 & valid_node & eq);
         currentNode = (new_node(txm[i], 4, tym[i], 2, tzm[i], 1) & eq) | (currentNode & ~eq);
 
         eq = ~(((1<<1) - currentNode)>>31);
@@ -376,8 +376,8 @@ void proc_subtree(double* tx0, double* ty0, double* tz0,
         t3 = tzm[i] - endpoint[i];
         valid_node = compute_valid_node(t1,t2,t3,txm[i],tym[i],tz1[i]);
         tmp_node = (unsigned char)(currentNode & valid_node & eq);
-        nodes[i] |= (tmp_node << a[i]) | (tmp_node >> (-a[i] & 7));
-        cur_index[0] = ((cur_index[1])+1 & valid_node & eq) | (cur_index[1] & valid_node & ~eq);
+        nodes[i] |= tmp_node;//(tmp_node << a[i]) | (tmp_node >> (-a[i] & 7));
+        cur_index[1u^a[i]] += (1 & valid_node & eq);
         currentNode = (new_node(txm[i], 5, tym[i], 3, tz1[i], 8) & eq) | (currentNode & ~eq);
 
         eq = ~(((1<<2) - currentNode)>>31);
@@ -386,8 +386,8 @@ void proc_subtree(double* tx0, double* ty0, double* tz0,
         t3 = tz0[i] - endpoint[i];
         valid_node = compute_valid_node(t1,t2,t3,txm[i],ty1[i],tzm[i]);
         tmp_node = (unsigned char)(currentNode & valid_node & eq);
-        nodes[i] |= (tmp_node << a[i]) | (tmp_node >> (-a[i] & 7));
-        cur_index[0] = ((cur_index[2])+1 & valid_node & eq) | (cur_index[2] & valid_node & ~eq);
+        nodes[i] |= tmp_node;//(tmp_node << a[i]) | (tmp_node >> (-a[i] & 7));
+        cur_index[2u^a[i]] += (1 & valid_node & eq);
         currentNode = (new_node(txm[i], 6, ty1[i], 8, tzm[i], 3) & eq) | (currentNode & ~eq);
 
         eq = ~(((1<<3) - currentNode)>>31);
@@ -396,8 +396,8 @@ void proc_subtree(double* tx0, double* ty0, double* tz0,
         t3 = tzm[i] - endpoint[i];
         valid_node = compute_valid_node(t1,t2,t3,txm[i],ty1[i],tz1[i]);
         tmp_node = (unsigned char)(currentNode & valid_node & eq);
-        nodes[i] |= (tmp_node << a[i]) | (tmp_node >> (-a[i] & 7));
-        cur_index[0] = ((cur_index[3])+1 & valid_node & eq) | (cur_index[3] & valid_node & ~eq);
+        nodes[i] |= tmp_node;//(tmp_node << a[i]) | (tmp_node >> (-a[i] & 7));
+        cur_index[3u^a[i]] += (1 & valid_node & eq);
         currentNode = (new_node(txm[i], 7, ty1[i], 8, tz1[i], 8) & eq) | (currentNode & ~eq);
 
         eq = ~(((1<<4) - currentNode)>>31);
@@ -406,8 +406,8 @@ void proc_subtree(double* tx0, double* ty0, double* tz0,
         t3 = tz0[i] - endpoint[i];
         valid_node = compute_valid_node(t1,t2,t3,tx1[i],tym[i],tzm[i]);
         tmp_node = (unsigned char)(currentNode & valid_node & eq);
-        nodes[i] |= (tmp_node << a[i]) | (tmp_node >> (-a[i] & 7));
-        cur_index[0] = ((cur_index[4])+1 & valid_node & eq) | (cur_index[4] & valid_node & ~eq);
+        nodes[i] |= tmp_node;//(tmp_node << a[i]) | (tmp_node >> (-a[i] & 7));
+        cur_index[4u^a[i]] += (1 & valid_node & eq);
         currentNode = (new_node(tx1[i], 8, tym[i], 6, tzm[i], 5) & eq) | (currentNode & ~eq);
 
         eq = ~(((1<<5) - currentNode)>>31);
@@ -416,8 +416,8 @@ void proc_subtree(double* tx0, double* ty0, double* tz0,
         t3 = tzm[i] - endpoint[i];
         valid_node = compute_valid_node(t1,t2,t3,tx1[i],tym[i],tz1[i]);
         tmp_node = (unsigned char)(currentNode & valid_node & eq);
-        nodes[i] |= (tmp_node << a[i]) | (tmp_node >> (-a[i] & 7));
-        cur_index[0] = ((cur_index[5])+1 & valid_node & eq) | (cur_index[5] & valid_node & ~eq);
+        nodes[i] |= tmp_node;//(tmp_node << a[i]) | (tmp_node >> (-a[i] & 7));
+        cur_index[5u^a[i]] += (1 & valid_node & eq);
         currentNode = (new_node(tx1[i], 8, tym[i], 7, tz1[i], 8) & eq) | (currentNode & ~eq);
 
         eq = ~(((1<<6) - currentNode)>>31);
@@ -426,8 +426,8 @@ void proc_subtree(double* tx0, double* ty0, double* tz0,
         t3 = tz0[i] - endpoint[i];
         valid_node = compute_valid_node(t1,t2,t3,tx1[i],ty1[i],tzm[i]);
         tmp_node = (unsigned char)(currentNode & valid_node & eq);
-        nodes[i] |= (tmp_node << a[i]) | (tmp_node >> (-a[i] & 7));
-        cur_index[0] = ((cur_index[6])+1 & valid_node & eq) | (cur_index[6] & valid_node & ~eq);
+        nodes[i] |= tmp_node;//(tmp_node << a[i]) | (tmp_node >> (-a[i] & 7));
+        cur_index[6u^a[i]] += (1 & valid_node & eq);
         currentNode = (new_node(tx1[i], 8, ty1[i], 8, tzm[i], 7) & eq) | (currentNode & ~eq);
 
         eq = ~(((1<<7) - currentNode)>>31);
@@ -436,8 +436,8 @@ void proc_subtree(double* tx0, double* ty0, double* tz0,
         t3 = tzm[i] - endpoint[i];
         valid_node = compute_valid_node(t1,t2,t3,tx1[i],ty1[i],tz1[i]);
         tmp_node = (unsigned char)(currentNode & valid_node & eq);
-        nodes[i] |= (tmp_node << a[i]) | (tmp_node >> (-a[i] & 7));
-        cur_index[0] = ((cur_index[7])+1 & valid_node & eq) | (cur_index[7] & valid_node & ~eq);
+        nodes[i] |= tmp_node;//(tmp_node << a[i]) | (tmp_node >> (-a[i] & 7));
+        cur_index[7u^a[i]] += (1 & valid_node & eq);
     }
 
 
@@ -451,118 +451,120 @@ void proc_subtree(double* tx0, double* ty0, double* tz0,
     unsigned char* new_a[8] = {0};
 
     for(int i = 0; i<8; i++){
-        new_tx0[i] = (double*)calloc(cur_index[i], sizeof(double));
-        new_ty0[i] = (double*)calloc(cur_index[i], sizeof(double));
-        new_tz0[i] = (double*)calloc(cur_index[i], sizeof(double));
-        new_tx1[i] = (double*)calloc(cur_index[i], sizeof(double));
-        new_ty1[i] = (double*)calloc(cur_index[i], sizeof(double));
-        new_tz1[i] = (double*)calloc(cur_index[i], sizeof(double));
-        new_endpoints[i] = (double*)calloc(cur_index[i], sizeof(double));
-        new_a[i] = (unsigned char*)calloc(cur_index[i], sizeof(unsigned char));
+        if(cur_index[i] > 0){
+            new_tx0[i] = (double*)calloc(cur_index[i], sizeof(double));
+            new_ty0[i] = (double*)calloc(cur_index[i], sizeof(double));
+            new_tz0[i] = (double*)calloc(cur_index[i], sizeof(double));
+            new_tx1[i] = (double*)calloc(cur_index[i], sizeof(double));
+            new_ty1[i] = (double*)calloc(cur_index[i], sizeof(double));
+            new_tz1[i] = (double*)calloc(cur_index[i], sizeof(double));
+            new_endpoints[i] = (double*)calloc(cur_index[i], sizeof(double));
+            new_a[i] = (unsigned char*)calloc(cur_index[i], sizeof(unsigned char));
+        }
     }
 
     int update_index[8] = {0};
     for(int i = 0; i < numRays; i++){
         if(nodes[i] & (1u<<0)){
-            new_tx0[0][update_index[0]] = 
-            new_ty0[0][update_index[0]] = 
-            new_tz0[0][update_index[0]] = 
-            new_tx1[0][update_index[0]] = 
-            new_ty1[0][update_index[0]] = 
-            new_tz1[0][update_index[0]] = 
-            new_endpoints[0][update_index[0]] = 
-            new_a[0][update_index[0]] = 
-            update_index[0]++;
+            new_tx0[a[i]][update_index[a[i]]] = tx0[i];
+            new_ty0[a[i]][update_index[a[i]]] = ty0[i];
+            new_tz0[a[i]][update_index[a[i]]] = tz0[i];
+            new_tx1[a[i]][update_index[a[i]]] = txm[i];
+            new_ty1[a[i]][update_index[a[i]]] = tym[i];
+            new_tz1[a[i]][update_index[a[i]]] = tzm[i];
+            new_endpoints[a[i]][update_index[a[i]]] = endpoint[i];
+            new_a[a[i]][update_index[a[i]]] = a[i];
+            update_index[0u^a[i]]++;
         }
         if(nodes[i] & (1u<<1)){
-            new_tx0[1][update_index[1]] = 
-            new_ty0[1][update_index[1]] = 
-            new_tz0[1][update_index[1]] = 
-            new_tx1[1][update_index[1]] = 
-            new_ty1[1][update_index[1]] = 
-            new_tz1[1][update_index[1]] = 
-            new_endpoints[1][update_index[1]] = 
-            new_a[1][update_index[1]] = 
-            update_index[1]++;
+            new_tx0[1u^a[i]][update_index[1u^a[i]]] = tx0[i];
+            new_ty0[1u^a[i]][update_index[1u^a[i]]] = ty0[i];
+            new_tz0[1u^a[i]][update_index[1u^a[i]]] = tzm[i];
+            new_tx1[1u^a[i]][update_index[1u^a[i]]] = txm[i];
+            new_ty1[1u^a[i]][update_index[1u^a[i]]] = tym[i];
+            new_tz1[1u^a[i]][update_index[1u^a[i]]] = tz1[i];
+            new_endpoints[1u^a[i]][update_index[1u^a[i]]] = endpoint[i];
+            new_a[1u^a[i]][update_index[1u^a[i]]] = a[i];
+            update_index[1u^a[i]]++;
         }
         if(nodes[i] & (1u<<2)){
-            new_tx0[2][update_index[2]] = 
-            new_ty0[2][update_index[2]] = 
-            new_tz0[2][update_index[2]] = 
-            new_tx1[2][update_index[2]] = 
-            new_ty1[2][update_index[2]] = 
-            new_tz1[2][update_index[2]] = 
-            new_endpoints[2][update_index[2]] = 
-            new_a[2][update_index[2]] = 
-            update_index[2]++;
+            new_tx0[2u^a[i]][update_index[2u^a[i]]] = tx0[i];
+            new_ty0[2u^a[i]][update_index[2u^a[i]]] = tym[i];
+            new_tz0[2u^a[i]][update_index[2u^a[i]]] = tz0[i];
+            new_tx1[2u^a[i]][update_index[2u^a[i]]] = txm[i];
+            new_ty1[2u^a[i]][update_index[2u^a[i]]] = ty1[i];
+            new_tz1[2u^a[i]][update_index[2u^a[i]]] = tzm[i];
+            new_endpoints[2u^a[i]][update_index[2u^a[i]]] = endpoint[i];
+            new_a[2u^a[i]][update_index[2u^a[i]]] = a[i];
+            update_index[2u^a[i]]++;
         }
         if(nodes[i] & (1u<<3)){
-            new_tx0[3][update_index[3]] = 
-            new_ty0[3][update_index[3]] = 
-            new_tz0[3][update_index[3]] = 
-            new_tx1[3][update_index[3]] = 
-            new_ty1[3][update_index[3]] = 
-            new_tz1[3][update_index[3]] = 
-            new_endpoints[3][update_index[3]] = 
-            new_a[3][update_index[3]] = 
-            update_index[3]++;
+            new_tx0[3u^a[i]][update_index[3u^a[i]]] = tx0[i];
+            new_ty0[3u^a[i]][update_index[3u^a[i]]] = tym[i];
+            new_tz0[3u^a[i]][update_index[3u^a[i]]] = tzm[i];
+            new_tx1[3u^a[i]][update_index[3u^a[i]]] = txm[i];
+            new_ty1[3u^a[i]][update_index[3u^a[i]]] = ty1[i];
+            new_tz1[3u^a[i]][update_index[3u^a[i]]] = tz1[i];
+            new_endpoints[3u^a[i]][update_index[3u^a[i]]] = endpoint[i];
+            new_a[3u^a[i]][update_index[3u^a[i]]] = a[i];
+            update_index[3u^a[i]]++;
         }
         if(nodes[i] & (1u<<4)){
-            new_tx0[4][update_index[4]] = 
-            new_ty0[4][update_index[4]] = 
-            new_tz0[4][update_index[4]] = 
-            new_tx1[4][update_index[4]] = 
-            new_ty1[4][update_index[4]] = 
-            new_tz1[4][update_index[4]] = 
-            new_endpoints[4][update_index[4]] = 
-            new_a[4][update_index[4]] = 
-            update_index[4]++;
+            new_tx0[4u^a[i]][update_index[4u^a[i]]] = txm[i];
+            new_ty0[4u^a[i]][update_index[4u^a[i]]] = ty0[i];
+            new_tz0[4u^a[i]][update_index[4u^a[i]]] = tz0[i];
+            new_tx1[4u^a[i]][update_index[4u^a[i]]] = tx1[i];
+            new_ty1[4u^a[i]][update_index[4u^a[i]]] = tym[i];
+            new_tz1[4u^a[i]][update_index[4u^a[i]]] = tzm[i];
+            new_endpoints[4u^a[i]][update_index[4u^a[i]]] = endpoint[i];
+            new_a[4u^a[i]][update_index[4u^a[i]]] = a[i];
+            update_index[4u^a[i]]++;
         }
         if(nodes[i] & (1u<<5)){
-            new_tx0[5][update_index[5]] = 
-            new_ty0[5][update_index[5]] = 
-            new_tz0[5][update_index[5]] = 
-            new_tx1[5][update_index[5]] = 
-            new_ty1[5][update_index[5]] = 
-            new_tz1[5][update_index[5]] = 
-            new_endpoints[5][update_index[5]] = 
-            new_a[5][update_index[5]] = 
-            update_index[5]++;
+            new_tx0[5u^a[i]][update_index[5u^a[i]]] = txm[i];
+            new_ty0[5u^a[i]][update_index[5u^a[i]]] = ty0[i];
+            new_tz0[5u^a[i]][update_index[5u^a[i]]] = tzm[i];
+            new_tx1[5u^a[i]][update_index[5u^a[i]]] = tx1[i];
+            new_ty1[5u^a[i]][update_index[5u^a[i]]] = tym[i];
+            new_tz1[5u^a[i]][update_index[5u^a[i]]] = tz1[i];
+            new_endpoints[5u^a[i]][update_index[5u^a[i]]] = endpoint[i];
+            new_a[5u^a[i]][update_index[5u^a[i]]] = a[i];
+            update_index[5u^a[i]]++;
         }
         if(nodes[i] & (1u<<6)){
-            new_tx0[6][update_index[6]] = 
-            new_ty0[6][update_index[6]] = 
-            new_tz0[6][update_index[6]] = 
-            new_tx1[6][update_index[6]] = 
-            new_ty1[6][update_index[6]] = 
-            new_tz1[6][update_index[6]] = 
-            new_endpoints[6][update_index[6]] = 
-            new_a[6][update_index[6]] = 
-            update_index[6]++;
+            new_tx0[6u^a[i]][update_index[6u^a[i]]] = txm[i];
+            new_ty0[6u^a[i]][update_index[6u^a[i]]] = tym[i];
+            new_tz0[6u^a[i]][update_index[6u^a[i]]] = tz0[i];
+            new_tx1[6u^a[i]][update_index[6u^a[i]]] = tx1[i];
+            new_ty1[6u^a[i]][update_index[6u^a[i]]] = ty1[i];
+            new_tz1[6u^a[i]][update_index[6u^a[i]]] = tzm[i];
+            new_endpoints[6u^a[i]][update_index[6u^a[i]]] = endpoint[i];
+            new_a[6u^a[i]][update_index[6u^a[i]]] = a[i];
+            update_index[6u^a[i]]++;
         }
         if(nodes[i] & (1u<<7)){
-            new_tx0[7][update_index[7]] = 
-            new_ty0[7][update_index[7]] = 
-            new_tz0[7][update_index[7]] = 
-            new_tx1[7][update_index[7]] = 
-            new_ty1[7][update_index[7]] = 
-            new_tz1[7][update_index[7]] = 
-            new_endpoints[7][update_index[7]] = 
-            new_a[7][update_index[7]] = 
-            update_index[7]++;
+            new_tx0[7u^a[i]][update_index[7u^a[i]]] = txm[i];
+            new_ty0[7u^a[i]][update_index[7u^a[i]]] = tym[i];
+            new_tz0[7u^a[i]][update_index[7u^a[i]]] = tzm[i];
+            new_tx1[7u^a[i]][update_index[7u^a[i]]] = tx1[i];
+            new_ty1[7u^a[i]][update_index[7u^a[i]]] = ty1[i];
+            new_tz1[7u^a[i]][update_index[7u^a[i]]] = tz1[i];
+            new_endpoints[7u^a[i]][update_index[7u^a[i]]] = endpoint[i];
+            new_a[7u^a[i]][update_index[7u^a[i]]] = a[i];
+            update_index[7u^a[i]]++;
         }         
     }
 
-    free(tx0);
-    free(ty0);
-    free(tz0);
-    free(tx1);
-    free(ty1);
-    free(tz1);
-    free(endpoint);
-    free(a);   
+    // free(tx0);
+    // free(ty0);
+    // free(tz0);
+    // free(tx1);
+    // free(ty1);
+    // free(tz1);
+    // free(endpoint);
+    // free(a);   
 
-    free(nodes); 
+    // free(nodes); 
 
 
     for(int node = 0; node < 8; node++) {
@@ -659,7 +661,7 @@ void ray_parameter(Octree* tree, Ray* rays, int numRays) {
         endpoints[i] = r->t_end;
     }
 
-    free(rays);
+    // free(rays);
 
     // for(int i = 0; i < numRays; i++){
         // for now assume our point cloud origin and all points exist within the actree bounds
