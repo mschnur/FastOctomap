@@ -499,6 +499,23 @@ void proc_subtree(double tx0, double ty0, double tz0,
 #endif
 }
 
+#define DBL_SGN_BIT(x) ((unsigned long long)(*((unsigned long long*)(&(x))) & 0x8000000000000000) >> 63)
+
+#define DBL_SGN_BIT(x) ((unsigned long long)(*((unsigned long long*)(&(x))) & 0x8000000000000000) >> 63)
+
+void ray_parameter_kernel(Octree* tree, Vector3d* points, size_t numPoints, Vector3d* sensorOrigin) {
+    int createdRoot = FALSE;
+    if (tree->root == NULL) {
+        // Using calloc instead of malloc initializes the memory to zero, which means that the the root's `children`
+        // array will be filled with zeros (which is equivalent to filling it will NULL pointers). It also sets the
+        // root's log odds to 0, which we want as our initial value.
+        tree->root = (Node *) calloc(1, sizeof(Node));
+        createdRoot = TRUE;
+    }
+
+    //TODO: implement kernel as described in kernel_analysis/Readme.md
+}
+
 
 void ray_parameter(Octree* tree, Ray* r) {
     int createdRoot = FALSE;
@@ -532,6 +549,8 @@ void ray_parameter(Octree* tree, Ray* r) {
         printf("X component of ray is negative, reflecting.\n");
 #endif
     }
+
+    signbit(r->direction.y)
 
     if (r->direction.y < 0.0f) {
         r->origin.y = -r->origin.y;
