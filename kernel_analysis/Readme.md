@@ -115,11 +115,6 @@ _mmm256_rsqrt_ps(magnitude) = recip_magnitude // vrsqrtps
 _mm256_mul_ps(diff, recip_magnitude) = direction // vmulps
 
 #### Micro-kernel 2 - Reflect negative directions and calculate "a"
-union UShortsInInt64
-{
-    __Int64 int;
-    uint16_t uShorts[4];
-} intToShorts;
 static const __m256 FourTwoOne = _mm256_set_ps(4.f, 2.f, 1.f, 0.f, 4.f, 2.f, 1.f, 0.f)  // What instruction?
 static const __m256i signBits = _mm256_set1_epi32(0x80000000); // May be vpbroadcastd
 // Cast signBits to __m256 (free - no instructions generated)
