@@ -276,9 +276,9 @@ void proc_subtree(double* tx0, double* ty0, double* tz0,
 
         double logLikelihoodUpdate = 0.0;
         if(hits > 0){
-            logLikelihoodUpdate = PROB_HIT_LOG;
-        } else {
             logLikelihoodUpdate = PROB_MISS_LOG;
+        } else {
+            logLikelihoodUpdate = PROB_HIT_LOG;
         }
 
         // Do the update
@@ -474,7 +474,7 @@ void proc_subtree(double* tx0, double* ty0, double* tz0,
             new_tz1[a[i]][update_index[a[i]]] = tzm[i];
             new_endpoints[a[i]][update_index[a[i]]] = endpoint[i];
             new_a[a[i]][update_index[a[i]]] = a[i];
-            update_index[0u^a[i]]++;
+            update_index[a[i]]++;
         }
         if(nodes[i] & (1u<<1)){
             new_tx0[1u^a[i]][update_index[1u^a[i]]] = tx0[i];
@@ -571,11 +571,10 @@ void proc_subtree(double* tx0, double* ty0, double* tz0,
         if(cur_index[node] > 0){
             //assumes a is already handled by now
             createChildIfItDoesntExist(n, node);
-            proc_subtree(new_tx0[node], new_ty0[node], new_tx1[node],
-                         new_ty1[node], new_tz1[node], new_tz1[node],
+            proc_subtree(new_tx0[node], new_ty0[node], new_tz0[node],
+                         new_tx1[node], new_ty1[node], new_tz1[node],
                          cur_index[node], depth + 1, 
                          n->children[node], new_a[node], new_endpoints[node]);
-            break;
         }
     }
 
