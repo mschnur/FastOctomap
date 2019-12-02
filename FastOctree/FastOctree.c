@@ -549,34 +549,40 @@ void ray_parameter(Octree* tree, Ray* r) {
             r->direction.x, r->direction.y, r->direction.z);
 #endif
 
-    // Since the tree is centered at (0, 0, 0), reflecting the origins is as simple as negating them.
-    if (r->direction.x < 0.0f) {
-        r->origin.x = -r->origin.x;
-        r->direction.x = -r->direction.x;
-        a |= 4u;
+    long long reflected, neg, cur, tmp;
 
-#ifdef DEBUG_RAY_PARAMETER
-        printf("X component of ray is negative, reflecting.\n");
-#endif
-    }
+    reflected = *((long long*)(&(r->direction.x)))>>63;
+    cur = *((unsigned long long*)(&(r->origin.x)));
+    neg = *((unsigned long long*)(&(r->origin.x))) ^ 0x8000000000000000;
+    tmp = (neg & reflected) | (cur & ~reflected);
+    r->origin.x = *((double*)(&tmp));
+    cur = *((unsigned long long*)(&(r->direction.x)));
+    neg = *((unsigned long long*)(&(r->direction.x))) & 0x7fffffffffffffff;
+    tmp = (neg & reflected) | (cur & ~reflected);
+    r->direction.x = *((double*)(&tmp));
+    a |= (4u & reflected);
 
-    if (r->direction.y < 0.0f) {
-        r->origin.y = -r->origin.y;
-        r->direction.y = -r->direction.y;
-        a |= 2u;
-#ifdef DEBUG_RAY_PARAMETER
-        printf("Y component of ray is negative, reflecting.\n");
-#endif
-    }
+    reflected = *((long long*)(&(r->direction.y)))>>63;
+    cur = *((unsigned long long*)(&(r->origin.y)));
+    neg = *((unsigned long long*)(&(r->origin.y))) ^ 0x8000000000000000;
+    tmp = (neg & reflected) | (cur & ~reflected);
+    r->origin.y = *((double*)(&tmp));
+    cur = *((unsigned long long*)(&(r->direction.y)));
+    neg = *((unsigned long long*)(&(r->direction.y))) & 0x7fffffffffffffff;
+    tmp = (neg & reflected) | (cur & ~reflected);
+    r->direction.y = *((double*)(&tmp));
+    a |= (2u & reflected);
 
-    if (r->direction.z < 0.0f) {
-        r->origin.z = -r->origin.z;
-        r->direction.z = -r->direction.z;
-        a |= 1u;
-#ifdef DEBUG_RAY_PARAMETER
-        printf("Z component of ray is negative, reflecting.\n");
-#endif
-    }
+    reflected = *((long long*)(&(r->direction.z)))>>63;
+    cur = *((unsigned long long*)(&(r->origin.z)));
+    neg = *((unsigned long long*)(&(r->origin.z))) ^ 0x8000000000000000;
+    tmp = (neg & reflected) | (cur & ~reflected);
+    r->origin.z = *((double*)(&tmp));
+    cur = *((unsigned long long*)(&(r->direction.z)));
+    neg = *((unsigned long long*)(&(r->direction.z))) & 0x7fffffffffffffff;
+    tmp = (neg & reflected) | (cur & ~reflected);
+    r->direction.z = *((double*)(&tmp));
+    a |= (1u & reflected);
 
 #ifdef DEBUG_RAY_PARAMETER
     printf("After potential reflection, ray origin: (%lf, %lf, %lf); direction: (%lf, %lf, %lf), a: %u\n",
@@ -601,14 +607,15 @@ void ray_parameter(Octree* tree, Ray* r) {
     printf("txyz1: %lf %lf %lf\n", tx1, ty1, tz1);
 #endif
 
-    if (MAX(MAX(tx0, ty0), tz0) < MIN(MIN(tx1, ty1), tz1))
-    {
+    // for now assume our point cloud origin and all points exist within the actree bounds
+    // if (MAX(MAX(tx0, ty0), tz0) < MIN(MIN(tx1, ty1), tz1))
+    // {
         proc_subtree(tx0, ty0, tz0, tx1, ty1, tz1, 0, tree->root, a, r);
-    }
-    else
-    {
-        printf("Ray outside of tree bounds\n");
-    }
+    // }
+    // else
+    // {
+    //     printf("Ray outside of tree bounds\n");
+    // }
 }
 
 static inline void pruneNode(Node* node)
