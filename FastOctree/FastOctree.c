@@ -302,6 +302,14 @@ void proc_subtree(double* tx0, double* ty0, double* tz0,
                 printf("Returning because we've updated the log odds of a node at the max depth\n");
         #endif
         
+        free(tx0);
+        free(ty0);
+        free(tz0);
+        free(tx1);
+        free(ty1);
+        free(tz1);
+        free(endpoint);
+        free(a);
 
         return;
     }
@@ -555,16 +563,16 @@ void proc_subtree(double* tx0, double* ty0, double* tz0,
         }         
     }
 
-    // free(tx0);
-    // free(ty0);
-    // free(tz0);
-    // free(tx1);
-    // free(ty1);
-    // free(tz1);
-    // free(endpoint);
-    // free(a);   
+    free(tx0);
+    free(ty0);
+    free(tz0);
+    free(tx1);
+    free(ty1);
+    free(tz1);
+    free(endpoint);
+    free(a);   
 
-    // free(nodes); 
+    free(nodes); 
 
 
     for(int node = 0; node < 8; node++) {
@@ -660,7 +668,7 @@ void ray_parameter(Octree* tree, Ray* rays, int numRays) {
         endpoints[i] = r->t_end;
     }
 
-    // free(rays);
+    free(rays);
 
     // for(int i = 0; i < numRays; i++){
         // for now assume our point cloud origin and all points exist within the actree bounds
