@@ -232,11 +232,10 @@ static inline long long compute_valid_node(double t1,double t2,double t3, double
                         & 0x8000000000000000)>>63;
 }
 
-
-void proc_subtree(double tx0, double ty0, double tz0,
-                  double tx1, double ty1, double tz1,
-                  unsigned int depth,
-                  Node* n, unsigned char a, Ray* r) {
+void proc_subtree(double* tx0, double* ty0, double* tz0,
+                  double* tx1, double* ty1, double* tz1,
+                  int numRays, unsigned int depth,
+                  Node* n, unsigned char* a, double* endpoint) {
     #ifdef DEBUG_TRACE_FUNCTION_CALLS
         //printf("proc_subtree, depth=%u\n", depth);
     #endif
@@ -249,34 +248,38 @@ void proc_subtree(double tx0, double ty0, double tz0,
     #endif
 
     
+
     if (depth == MAX_DEPTH) {
-        #ifdef DEBUG_PROC_SUBTREE
-                printf("depth is equal to MAX_DEPTH, so updating the log likelihood of this node\n");
-        #endif
-
-        double logLikelihoodUpdate = 0.0;
-
-        if (any_is_greater(r->t_end, r->t_end, r->t_end, tx1, ty1, tz1)) {
+        int hits = 0;
+        for(int i = 0; i < numRays; i++){
             #ifdef DEBUG_PROC_SUBTREE
-                        printf("r->t_end is greater than any of tx1, ty1, and tz1; voting a MISS\n");
+                    printf("depth is equal to MAX_DEPTH, so updating the log likelihood of this node\n");
             #endif
-            // The ray endpoint does not occur in this subtree, but the ray passes through this subtree on its
-            // way to the endpoint, and we're at our maximum depth. Therefore we need to give this node a vote
-            // that it is free space.
-            logLikelihoodUpdate = PROB_MISS_LOG;
-        }
-        else {
-            #ifdef DEBUG_PROC_SUBTREE
-                        printf("r->t_end is NOT greater than any of tx1, ty1, and tz1; voting a HIT\n");
-            #endif
-            // The ray endpoint occurs within this subtree, and we're at our maximum depth. Therefore we need to
-            // give this node a vote that it is free space.
-            logLikelihoodUpdate = PROB_HIT_LOG;
+
+            if (any_is_greater(endpoint[i], endpoint[i], endpoint[i], tx1[i], ty1[i], tz1[i])) {
+                #ifdef DEBUG_PROC_SUBTREE
+                            printf("r->t_end is greater than any of tx1, ty1, and tz1; voting a MISS\n");
+                #endif
+                // The ray endpoint does not occur in this subtree, but the ray passes through this subtree on its
+                // way to the endpoint, and we're at our maximum depth. Therefore we need to give this node a vote
+                // that it is free space.
+                
+                //just need to find the first hit
+                hits += 1;
+                break; 
+            }
         }
 
         #ifdef DEBUG_PROC_SUBTREE
                 double previousLogOdds = n->logOdds;
         #endif
+
+        double logLikelihoodUpdate = 0.0;
+        if(hits > 0){
+            logLikelihoodUpdate = PROB_HIT_LOG;
+        } else {
+            logLikelihoodUpdate = PROB_MISS_LOG;
+        }
 
         // Do the update
         n->logOdds += logLikelihoodUpdate;
@@ -298,220 +301,279 @@ void proc_subtree(double tx0, double ty0, double tz0,
         #ifdef DEBUG_PROC_SUBTREE
                 printf("Returning because we've updated the log odds of a node at the max depth\n");
         #endif
+        
+
         return;
     }
+    //compute t_ms
+    double* txm = (double*)calloc(numRays, sizeof(double));
+    double* tym = (double*)calloc(numRays, sizeof(double));
+    double* tzm = (double*)calloc(numRays, sizeof(double));
 
-    double txm, tym, tzm;
-    int currentNode = 0;
+    unsigned char* nodes = (unsigned char*)calloc(numRays,sizeof(unsigned char));
+    for(int i = 0; i < numRays; i++){
+        txm[i] = 0.5 * (tx0[i] + tx1[i]);
+        tym[i] = 0.5 * (ty0[i] + ty1[i]);
+        tzm[i] = 0.5 * (tz0[i] + tz1[i]);
+    }
+    
+    int cur_index[8] = {0};
+    for(int i = 0; i < numRays; i++){
+        int currentNode = 0;
+        double t1,t2,t3;
+        int eq;
+        long long valid_node;
+        unsigned char tmp_node = 0;
+        
 
-    double t1,t2,t3;
-    int eq;
-    long long valid_node;
-    unsigned char nodes = 0;
+        #ifdef DEBUG_PROC_SUBTREE
+            printf("txm = %lf, tym = %lf, tzm = %lf\n", txm, tym, tzm);
+        #endif
 
-    txm = 0.5 * (tx0 + tx1);
-    tym = 0.5 * (ty0 + ty1);
-    tzm = 0.5 * (tz0 + tz1);
+        double tmp1 = ty0[i] - tx0[i];
+        double tmp2 = tz0[i] - tx0[i];
+        double tmp3 = tym[i] - tx0[i];
+        double tmp4 = tzm[i] - tx0[i];
 
-    #ifdef DEBUG_PROC_SUBTREE
-        printf("txm = %lf, tym = %lf, tzm = %lf\n", txm, tym, tzm);
-    #endif
+        double tmp5 = tz0[i] - ty0[i];
+        double tmp6 = txm[i] - ty0[i];
+        double tmp7 = tzm[i] - ty0[i];
 
-    double tmp1 = ty0 - tx0;
-    double tmp2 = tz0 - tx0;
-    double tmp3 = tym - tx0;
-    double tmp4 = tzm - tx0;
-
-    double tmp5 = tz0 - ty0;
-    double tmp6 = txm - ty0;
-    double tmp7 = tzm - ty0;
-
-    double tmp8 = txm - tz0;
-    double tmp9 = tym - tz0;
-
-
-    currentNode |= (int)((unsigned long long)(*((unsigned long long*)(&tmp1)) & *((unsigned long long*)(&tmp2)) & *((unsigned long long*)(&tmp3)) & 0x8000000000000000)>>62);
-    currentNode |= (int)((unsigned long long)(*((unsigned long long*)(&tmp1)) & *((unsigned long long*)(&tmp2)) & *((unsigned long long*)(&tmp4)) & 0x8000000000000000)>>63);
-
-    currentNode |= (int)((unsigned long long)(~*((unsigned long long*)(&tmp1)) & *((unsigned long long*)(&tmp5)) & *((unsigned long long*)(&tmp6)) & 0x8000000000000000)>>61);
-    currentNode |= (int)((unsigned long long)(~*((unsigned long long*)(&tmp1)) & *((unsigned long long*)(&tmp5)) & *((unsigned long long*)(&tmp7)) & 0x8000000000000000)>>63);
-
-    currentNode |= (int)((unsigned long long)(~*((unsigned long long*)(&tmp2)) & ~*((unsigned long long*)(&tmp5)) & *((unsigned long long*)(&tmp8)) & 0x8000000000000000)>>61);
-    currentNode |= (int)((unsigned long long)(~*((unsigned long long*)(&tmp2)) & ~*((unsigned long long*)(&tmp5)) & *((unsigned long long*)(&tmp9)) & 0x8000000000000000)>>62);
+        double tmp8 = txm[i] - tz0[i];
+        double tmp9 = tym[i] - tz0[i];
 
 
-    #ifdef DEBUG_PROC_SUBTREE
-        printf("depth=%u: first_node: %d\n", depth, currentNode);
-    #endif
+        currentNode |= (int)((unsigned long long)(*((unsigned long long*)(&tmp1)) & *((unsigned long long*)(&tmp2)) & *((unsigned long long*)(&tmp3)) & 0x8000000000000000)>>62);
+        currentNode |= (int)((unsigned long long)(*((unsigned long long*)(&tmp1)) & *((unsigned long long*)(&tmp2)) & *((unsigned long long*)(&tmp4)) & 0x8000000000000000)>>63);
 
-    currentNode = 1u<<currentNode;
+        currentNode |= (int)((unsigned long long)(~*((unsigned long long*)(&tmp1)) & *((unsigned long long*)(&tmp5)) & *((unsigned long long*)(&tmp6)) & 0x8000000000000000)>>61);
+        currentNode |= (int)((unsigned long long)(~*((unsigned long long*)(&tmp1)) & *((unsigned long long*)(&tmp5)) & *((unsigned long long*)(&tmp7)) & 0x8000000000000000)>>63);
 
-    eq = ~(((1<<0) - currentNode)>>31);
-    //this should compute if the currentNode is valid.
-    t1 = tx0 - r->t_end;
-    t2 = ty0 - r->t_end;
-    t3 = tz0 - r->t_end;
-    valid_node = compute_valid_node(t1,t2,t3,txm,tym,tzm);
-    nodes |= currentNode & valid_node & eq;
-    currentNode = (new_node(txm, 4, tym, 2, tzm, 1) & eq) | (currentNode & ~eq);
+        currentNode |= (int)((unsigned long long)(~*((unsigned long long*)(&tmp2)) & ~*((unsigned long long*)(&tmp5)) & *((unsigned long long*)(&tmp8)) & 0x8000000000000000)>>61);
+        currentNode |= (int)((unsigned long long)(~*((unsigned long long*)(&tmp2)) & ~*((unsigned long long*)(&tmp5)) & *((unsigned long long*)(&tmp9)) & 0x8000000000000000)>>62);
 
-    eq = ~(((1<<1) - currentNode)>>31);
-    t1 = tx0 - r->t_end;
-    t2 = ty0 - r->t_end;
-    t3 = tzm - r->t_end;
-    valid_node = compute_valid_node(t1,t2,t3,txm,tym,tz1);
-    nodes |= currentNode & valid_node & eq;
-    currentNode = (new_node(txm, 5, tym, 3, tz1, 8) & eq) | (currentNode & ~eq);
 
-    eq = ~(((1<<2) - currentNode)>>31);
-    t1 = tx0 - r->t_end;
-    t2 = tym - r->t_end;
-    t3 = tz0 - r->t_end;
-    valid_node = compute_valid_node(t1,t2,t3,txm,ty1,tzm);
-    nodes |= currentNode & valid_node & eq;
-    currentNode = (new_node(txm, 6, ty1, 8, tzm, 3) & eq) | (currentNode & ~eq);
+        #ifdef DEBUG_PROC_SUBTREE
+            printf("depth=%u: first_node: %d\n", depth, currentNode);
+        #endif
 
-    eq = ~(((1<<3) - currentNode)>>31);
-    t1 = tx0 - r->t_end;
-    t2 = tym - r->t_end;
-    t3 = tzm - r->t_end;
-    valid_node = compute_valid_node(t1,t2,t3,txm,ty1,tz1);
-    nodes |= currentNode & valid_node & eq;
-    currentNode = (new_node(txm, 7, ty1, 8, tz1, 8) & eq) | (currentNode & ~eq);
+        currentNode = 1u<<currentNode;
 
-    eq = ~(((1<<4) - currentNode)>>31);
-    t1 = txm - r->t_end;
-    t2 = ty0 - r->t_end;
-    t3 = tz0 - r->t_end;
-    valid_node = compute_valid_node(t1,t2,t3,tx1,tym,tzm);
-    nodes |= currentNode & valid_node & eq;
-    currentNode = (new_node(tx1, 8, tym, 6, tzm, 5) & eq) | (currentNode & ~eq);
+        eq = ~(((1<<0) - currentNode)>>31);
+        //this should compute if the currentNode is valid.
+        t1 = tx0[i] - endpoint[i];
+        t2 = ty0[i] - endpoint[i];
+        t3 = tz0[i] - endpoint[i];
+        valid_node = compute_valid_node(t1,t2,t3,txm[i],tym[i],tzm[i]);
+        tmp_node = (unsigned char)(currentNode & valid_node & eq);
+        nodes[i] |= (tmp_node << a[i]) | (tmp_node >> (-a[i] & 7));
+        cur_index[0] = ((cur_index[0])+1 & valid_node & eq) | (cur_index[0] & valid_node & ~eq);
+        currentNode = (new_node(txm[i], 4, tym[i], 2, tzm[i], 1) & eq) | (currentNode & ~eq);
 
-    eq = ~(((1<<5) - currentNode)>>31);
-    t1 = txm - r->t_end;
-    t2 = ty0 - r->t_end;
-    t3 = tzm - r->t_end;
-    valid_node = compute_valid_node(t1,t2,t3,tx1,tym,tz1);
-    nodes |= currentNode & valid_node & eq;
-    currentNode = (new_node(tx1, 8, tym, 7, tz1, 8) & eq) | (currentNode & ~eq);
+        eq = ~(((1<<1) - currentNode)>>31);
+        t1 = tx0[i] - endpoint[i];
+        t2 = ty0[i] - endpoint[i];
+        t3 = tzm[i] - endpoint[i];
+        valid_node = compute_valid_node(t1,t2,t3,txm[i],tym[i],tz1[i]);
+        tmp_node = (unsigned char)(currentNode & valid_node & eq);
+        nodes[i] |= (tmp_node << a[i]) | (tmp_node >> (-a[i] & 7));
+        cur_index[0] = ((cur_index[1])+1 & valid_node & eq) | (cur_index[1] & valid_node & ~eq);
+        currentNode = (new_node(txm[i], 5, tym[i], 3, tz1[i], 8) & eq) | (currentNode & ~eq);
 
-    eq = ~(((1<<6) - currentNode)>>31);
-    t1 = txm - r->t_end;
-    t2 = tym - r->t_end;
-    t3 = tz0 - r->t_end;
-    valid_node = compute_valid_node(t1,t2,t3,tx1,ty1,tzm);
-    nodes |= currentNode & valid_node & eq;
-    currentNode = (new_node(tx1, 8, ty1, 8, tzm, 7) & eq) | (currentNode & ~eq);
+        eq = ~(((1<<2) - currentNode)>>31);
+        t1 = tx0[i] - endpoint[i];
+        t2 = tym[i] - endpoint[i];
+        t3 = tz0[i] - endpoint[i];
+        valid_node = compute_valid_node(t1,t2,t3,txm[i],ty1[i],tzm[i]);
+        tmp_node = (unsigned char)(currentNode & valid_node & eq);
+        nodes[i] |= (tmp_node << a[i]) | (tmp_node >> (-a[i] & 7));
+        cur_index[0] = ((cur_index[2])+1 & valid_node & eq) | (cur_index[2] & valid_node & ~eq);
+        currentNode = (new_node(txm[i], 6, ty1[i], 8, tzm[i], 3) & eq) | (currentNode & ~eq);
 
-    eq = ~(((1<<7) - currentNode)>>31);
-    t1 = txm - r->t_end;
-    t2 = tym - r->t_end;
-    t3 = tzm - r->t_end;
-    valid_node = compute_valid_node(t1,t2,t3,tx1,ty1,tz1);
-    nodes |= currentNode & valid_node & eq;
+        eq = ~(((1<<3) - currentNode)>>31);
+        t1 = tx0[i] - endpoint[i];
+        t2 = tym[i] - endpoint[i];
+        t3 = tzm[i] - endpoint[i];
+        valid_node = compute_valid_node(t1,t2,t3,txm[i],ty1[i],tz1[i]);
+        tmp_node = (unsigned char)(currentNode & valid_node & eq);
+        nodes[i] |= (tmp_node << a[i]) | (tmp_node >> (-a[i] & 7));
+        cur_index[0] = ((cur_index[3])+1 & valid_node & eq) | (cur_index[3] & valid_node & ~eq);
+        currentNode = (new_node(txm[i], 7, ty1[i], 8, tz1[i], 8) & eq) | (currentNode & ~eq);
+
+        eq = ~(((1<<4) - currentNode)>>31);
+        t1 = txm[i] - endpoint[i];
+        t2 = ty0[i] - endpoint[i];
+        t3 = tz0[i] - endpoint[i];
+        valid_node = compute_valid_node(t1,t2,t3,tx1[i],tym[i],tzm[i]);
+        tmp_node = (unsigned char)(currentNode & valid_node & eq);
+        nodes[i] |= (tmp_node << a[i]) | (tmp_node >> (-a[i] & 7));
+        cur_index[0] = ((cur_index[4])+1 & valid_node & eq) | (cur_index[4] & valid_node & ~eq);
+        currentNode = (new_node(tx1[i], 8, tym[i], 6, tzm[i], 5) & eq) | (currentNode & ~eq);
+
+        eq = ~(((1<<5) - currentNode)>>31);
+        t1 = txm[i] - endpoint[i];
+        t2 = ty0[i] - endpoint[i];
+        t3 = tzm[i] - endpoint[i];
+        valid_node = compute_valid_node(t1,t2,t3,tx1[i],tym[i],tz1[i]);
+        tmp_node = (unsigned char)(currentNode & valid_node & eq);
+        nodes[i] |= (tmp_node << a[i]) | (tmp_node >> (-a[i] & 7));
+        cur_index[0] = ((cur_index[5])+1 & valid_node & eq) | (cur_index[5] & valid_node & ~eq);
+        currentNode = (new_node(tx1[i], 8, tym[i], 7, tz1[i], 8) & eq) | (currentNode & ~eq);
+
+        eq = ~(((1<<6) - currentNode)>>31);
+        t1 = txm[i] - endpoint[i];
+        t2 = tym[i] - endpoint[i];
+        t3 = tz0[i] - endpoint[i];
+        valid_node = compute_valid_node(t1,t2,t3,tx1[i],ty1[i],tzm[i]);
+        tmp_node = (unsigned char)(currentNode & valid_node & eq);
+        nodes[i] |= (tmp_node << a[i]) | (tmp_node >> (-a[i] & 7));
+        cur_index[0] = ((cur_index[6])+1 & valid_node & eq) | (cur_index[6] & valid_node & ~eq);
+        currentNode = (new_node(tx1[i], 8, ty1[i], 8, tzm[i], 7) & eq) | (currentNode & ~eq);
+
+        eq = ~(((1<<7) - currentNode)>>31);
+        t1 = txm[i] - endpoint[i];
+        t2 = tym[i] - endpoint[i];
+        t3 = tzm[i] - endpoint[i];
+        valid_node = compute_valid_node(t1,t2,t3,tx1[i],ty1[i],tz1[i]);
+        tmp_node = (unsigned char)(currentNode & valid_node & eq);
+        nodes[i] |= (tmp_node << a[i]) | (tmp_node >> (-a[i] & 7));
+        cur_index[0] = ((cur_index[7])+1 & valid_node & eq) | (cur_index[7] & valid_node & ~eq);
+    }
+
+
+    double* new_tx0[8] = {0};
+    double* new_ty0[8] = {0};
+    double* new_tz0[8] = {0};
+    double* new_tx1[8] = {0};
+    double* new_ty1[8] = {0};
+    double* new_tz1[8] = {0};
+    double* new_endpoints[8] = {0};
+    unsigned char* new_a[8] = {0};
+
+    for(int i = 0; i<8; i++){
+        new_tx0[i] = (double*)calloc(cur_index[i], sizeof(double));
+        new_ty0[i] = (double*)calloc(cur_index[i], sizeof(double));
+        new_tz0[i] = (double*)calloc(cur_index[i], sizeof(double));
+        new_tx1[i] = (double*)calloc(cur_index[i], sizeof(double));
+        new_ty1[i] = (double*)calloc(cur_index[i], sizeof(double));
+        new_tz1[i] = (double*)calloc(cur_index[i], sizeof(double));
+        new_endpoints[i] = (double*)calloc(cur_index[i], sizeof(double));
+        new_a[i] = (unsigned char*)calloc(cur_index[i], sizeof(unsigned char));
+    }
+
+    int update_index[8] = {0};
+    for(int i = 0; i < numRays; i++){
+        if(nodes[i] & (1u<<0)){
+            new_tx0[0][update_index[0]] = 
+            new_ty0[0][update_index[0]] = 
+            new_tz0[0][update_index[0]] = 
+            new_tx1[0][update_index[0]] = 
+            new_ty1[0][update_index[0]] = 
+            new_tz1[0][update_index[0]] = 
+            new_endpoints[0][update_index[0]] = 
+            new_a[0][update_index[0]] = 
+            update_index[0]++;
+        }
+        if(nodes[i] & (1u<<1)){
+            new_tx0[1][update_index[1]] = 
+            new_ty0[1][update_index[1]] = 
+            new_tz0[1][update_index[1]] = 
+            new_tx1[1][update_index[1]] = 
+            new_ty1[1][update_index[1]] = 
+            new_tz1[1][update_index[1]] = 
+            new_endpoints[1][update_index[1]] = 
+            new_a[1][update_index[1]] = 
+            update_index[1]++;
+        }
+        if(nodes[i] & (1u<<2)){
+            new_tx0[2][update_index[2]] = 
+            new_ty0[2][update_index[2]] = 
+            new_tz0[2][update_index[2]] = 
+            new_tx1[2][update_index[2]] = 
+            new_ty1[2][update_index[2]] = 
+            new_tz1[2][update_index[2]] = 
+            new_endpoints[2][update_index[2]] = 
+            new_a[2][update_index[2]] = 
+            update_index[2]++;
+        }
+        if(nodes[i] & (1u<<3)){
+            new_tx0[3][update_index[3]] = 
+            new_ty0[3][update_index[3]] = 
+            new_tz0[3][update_index[3]] = 
+            new_tx1[3][update_index[3]] = 
+            new_ty1[3][update_index[3]] = 
+            new_tz1[3][update_index[3]] = 
+            new_endpoints[3][update_index[3]] = 
+            new_a[3][update_index[3]] = 
+            update_index[3]++;
+        }
+        if(nodes[i] & (1u<<4)){
+            new_tx0[4][update_index[4]] = 
+            new_ty0[4][update_index[4]] = 
+            new_tz0[4][update_index[4]] = 
+            new_tx1[4][update_index[4]] = 
+            new_ty1[4][update_index[4]] = 
+            new_tz1[4][update_index[4]] = 
+            new_endpoints[4][update_index[4]] = 
+            new_a[4][update_index[4]] = 
+            update_index[4]++;
+        }
+        if(nodes[i] & (1u<<5)){
+            new_tx0[5][update_index[5]] = 
+            new_ty0[5][update_index[5]] = 
+            new_tz0[5][update_index[5]] = 
+            new_tx1[5][update_index[5]] = 
+            new_ty1[5][update_index[5]] = 
+            new_tz1[5][update_index[5]] = 
+            new_endpoints[5][update_index[5]] = 
+            new_a[5][update_index[5]] = 
+            update_index[5]++;
+        }
+        if(nodes[i] & (1u<<6)){
+            new_tx0[6][update_index[6]] = 
+            new_ty0[6][update_index[6]] = 
+            new_tz0[6][update_index[6]] = 
+            new_tx1[6][update_index[6]] = 
+            new_ty1[6][update_index[6]] = 
+            new_tz1[6][update_index[6]] = 
+            new_endpoints[6][update_index[6]] = 
+            new_a[6][update_index[6]] = 
+            update_index[6]++;
+        }
+        if(nodes[i] & (1u<<7)){
+            new_tx0[7][update_index[7]] = 
+            new_ty0[7][update_index[7]] = 
+            new_tz0[7][update_index[7]] = 
+            new_tx1[7][update_index[7]] = 
+            new_ty1[7][update_index[7]] = 
+            new_tz1[7][update_index[7]] = 
+            new_endpoints[7][update_index[7]] = 
+            new_a[7][update_index[7]] = 
+            update_index[7]++;
+        }         
+    }
+
+    free(tx0);
+    free(ty0);
+    free(tz0);
+    free(tx1);
+    free(ty1);
+    free(tz1);
+    free(endpoint);
+    free(a);   
+
+    free(nodes); 
+
 
     for(int node = 0; node < 8; node++) {
-        if(nodes & (1u<<node)){
-            switch (node) {
-                case 0:
-                    createChildIfItDoesntExist(n, a);
-                    #ifdef DEBUG_PROC_SUBTREE
-                                    //printf("depth=%u: current node = %d, child index = %u, created child = %s\n", depth, currentNode, a, (createdChild ? "TRUE" : "FALSE"));
-                    #endif
-                    proc_subtree(tx0, ty0, tz0, txm, tym, tzm, depth + 1, n->children[a], a, r);
-                    currentNode = new_node(txm, 4, tym, 2, tzm, 1);
-                    #ifdef DEBUG_PROC_SUBTREE
-                                    printf("depth=%u: previous node = 0, new_node = %d\n", depth, currentNode);
-                    #endif
-                    break;
-
-                case 1:
-                    createChildIfItDoesntExist(n, 1u^a);
-                    #ifdef DEBUG_PROC_SUBTREE
-                                    //printf("depth=%u: current node = %d, child index = %u, created child = %s\n", depth, currentNode, 1u^a, (createdChild ? "TRUE" : "FALSE"));
-                    #endif
-                    proc_subtree(tx0, ty0, tzm, txm, tym, tz1, depth + 1, n->children[1u^a], a, r);
-                    currentNode = new_node(txm, 5, tym, 3, tz1, 8);
-                    #ifdef DEBUG_PROC_SUBTREE
-                                    printf("depth=%u: previous node = 1, new_node = %d\n", depth, currentNode);
-                    #endif
-                    break;
-
-                case 2:
-                    createChildIfItDoesntExist(n, 2u^a);
-                    #ifdef DEBUG_PROC_SUBTREE
-                                    //printf("depth=%u: current node = %d, child index = %u, created child = %s\n", depth, currentNode, 2u^a, (createdChild ? "TRUE" : "FALSE"));
-                    #endif
-                    proc_subtree(tx0, tym, tz0, txm, ty1, tzm, depth + 1, n->children[2u^a], a, r);
-                    currentNode = new_node(txm, 6, ty1, 8, tzm, 3);
-                    #ifdef DEBUG_PROC_SUBTREE
-                                    printf("depth=%u: previous node = 2, new_node = %d\n", depth, currentNode);
-                    #endif
-                    break;
-
-                case 3:
-                    createChildIfItDoesntExist(n, 3u^a);
-                    #ifdef DEBUG_PROC_SUBTREE
-                                    //printf("depth=%u: current node = %d, child index = %u, created child = %s\n", depth, currentNode, 3u^a, (createdChild ? "TRUE" : "FALSE"));
-                    #endif
-                    proc_subtree(tx0, tym, tzm, txm, ty1, tz1, depth + 1, n->children[3u^a], a, r);
-                    currentNode = new_node(txm, 7, ty1, 8, tz1, 8);
-                    #ifdef DEBUG_PROC_SUBTREE
-                                    printf("depth=%u: previous node = 3, new_node = %d\n", depth, currentNode);
-                    #endif
-                    break;
-
-                case 4:
-                    createChildIfItDoesntExist(n, 4u^a);
-                    #ifdef DEBUG_PROC_SUBTREE
-                                    //printf("depth=%u: current node = %d, child index = %u, created child = %s\n", depth, currentNode, 4u^a, (createdChild ? "TRUE" : "FALSE"));
-                    #endif
-                    proc_subtree(txm, ty0, tz0, tx1, tym, tzm, depth + 1, n->children[4u^a], a, r);
-                    currentNode = new_node(tx1, 8, tym, 6, tzm, 5);
-                    #ifdef DEBUG_PROC_SUBTREE
-                                    printf("depth=%u: previous node = 4, new_node = %d\n", depth, currentNode);
-                    #endif
-                    break;
-
-                case 5:
-                    createChildIfItDoesntExist(n, 5u^a);
-                    #ifdef DEBUG_PROC_SUBTREE
-                                    //printf("depth=%u: current node = %d, child index = %u, created child = %s\n", depth, currentNode, 5u^a, (createdChild ? "TRUE" : "FALSE"));
-                    #endif
-                    proc_subtree(txm, ty0, tzm, tx1, tym, tz1, depth + 1, n->children[5u^a], a, r);
-                    currentNode = new_node(tx1, 8, tym, 7, tz1, 8);
-                    #ifdef DEBUG_PROC_SUBTREE
-                                    printf("depth=%u: previous node = 5, new_node = %d\n", depth, currentNode);
-                    #endif
-                    break;
-
-                case 6:
-                    createChildIfItDoesntExist(n, 6u^a);
-                    #ifdef DEBUG_PROC_SUBTREE
-                                    //printf("depth=%u: current node = %d, child index = %u, created child = %s\n", depth, currentNode, 6u^a, (createdChild ? "TRUE" : "FALSE"));
-                    #endif
-                    proc_subtree(txm, tym, tz0, tx1, ty1, tzm, depth + 1, n->children[6u^a], a, r);
-                    currentNode = new_node(tx1, 8, ty1, 8, tzm, 7);
-                    #ifdef DEBUG_PROC_SUBTREE
-                                    printf("depth=%u: previous node = 6, new_node = %d\n", depth, currentNode);
-                    #endif
-                    break;
-
-                case 7:
-                    createChildIfItDoesntExist(n, 7u^a);
-                    #ifdef DEBUG_PROC_SUBTREE
-                                    //printf("depth=%u: current node = %d, child index = %u, created child = %s\n", depth, currentNode, 7u^a, (createdChild ? "TRUE" : "FALSE"));
-                    #endif
-                    proc_subtree(txm, tym, tzm, tx1, ty1, tz1, depth + 1, n->children[7u^a], a, r);
-                    currentNode = 8;
-                    #ifdef DEBUG_PROC_SUBTREE
-                                    printf("depth=%u: previous node = 7, new_node = %d\n", depth, currentNode);
-                    #endif
-                    break;
-
-                default:
-                    assert(0);
-            }
+        if(cur_index[node] > 0){
+            //assumes a is already handled by now
+            createChildIfItDoesntExist(n, node);
+            proc_subtree(new_tx0[node], new_ty0[node], new_tx1[node],
+                         new_ty1[node], new_tz1[node], new_tz1[node],
+                         cur_index[node], depth + 1, 
+                         n->children[node], new_a[node], new_endpoints[node]);
+            break;
         }
     }
 
@@ -527,7 +589,7 @@ void proc_subtree(double tx0, double ty0, double tz0,
 }
 
 
-void ray_parameter(Octree* tree, Ray* r) {
+void ray_parameter(Octree* tree, Ray* rays, int numRays) {
     int createdRoot = FALSE;
     if (tree->root == NULL) {
         // Using calloc instead of malloc initializes the memory to zero, which means that the the root's `children`
@@ -537,84 +599,78 @@ void ray_parameter(Octree* tree, Ray* r) {
         createdRoot = TRUE;
     }
 
-#ifdef DEBUG_TRACE_FUNCTION_CALLS
-    printf("ray_parameter\n");
-#endif
+    double* tx0 = (double*)calloc(numRays, sizeof(double));
+    double* ty0 = (double*)calloc(numRays, sizeof(double));
+    double* tz0 = (double*)calloc(numRays, sizeof(double));
+    double* tx1 = (double*)calloc(numRays, sizeof(double));
+    double* ty1 = (double*)calloc(numRays, sizeof(double));
+    double* tz1 = (double*)calloc(numRays, sizeof(double));
+    double* endpoints = (double*)calloc(numRays, sizeof(double));
+    unsigned char* a = (unsigned char*)calloc(numRays, sizeof(unsigned char));
 
-    unsigned char a = 0;
+    for(int i = 0; i < numRays; i++){
+        long long reflected, neg, cur, tmp;
+        Ray* r = (rays+i);
 
-#ifdef DEBUG_RAY_PARAMETER
-    printf("Original ray origin: (%lf, %lf, %lf); direction: (%lf, %lf, %lf)\n",
-            r->origin.x, r->origin.y, r->origin.z,
-            r->direction.x, r->direction.y, r->direction.z);
-#endif
+        reflected = *((long long*)(&(r->direction.x)))>>63;
+        cur = *((unsigned long long*)(&(r->origin.x)));
+        neg = *((unsigned long long*)(&(r->origin.x))) ^ 0x8000000000000000;
+        tmp = (neg & reflected) | (cur & ~reflected);
+        r->origin.x = *((double*)(&tmp));
+        cur = *((unsigned long long*)(&(r->direction.x)));
+        neg = *((unsigned long long*)(&(r->direction.x))) & 0x7fffffffffffffff;
+        tmp = (neg & reflected) | (cur & ~reflected);
+        r->direction.x = *((double*)(&tmp));
+        a[i] |= (4u & reflected);
 
-    long long reflected, neg, cur, tmp;
+        reflected = *((long long*)(&(r->direction.y)))>>63;
+        cur = *((unsigned long long*)(&(r->origin.y)));
+        neg = *((unsigned long long*)(&(r->origin.y))) ^ 0x8000000000000000;
+        tmp = (neg & reflected) | (cur & ~reflected);
+        r->origin.y = *((double*)(&tmp));
+        cur = *((unsigned long long*)(&(r->direction.y)));
+        neg = *((unsigned long long*)(&(r->direction.y))) & 0x7fffffffffffffff;
+        tmp = (neg & reflected) | (cur & ~reflected);
+        r->direction.y = *((double*)(&tmp));
+        a[i] |= (2u & reflected);
 
-    reflected = *((long long*)(&(r->direction.x)))>>63;
-    cur = *((unsigned long long*)(&(r->origin.x)));
-    neg = *((unsigned long long*)(&(r->origin.x))) ^ 0x8000000000000000;
-    tmp = (neg & reflected) | (cur & ~reflected);
-    r->origin.x = *((double*)(&tmp));
-    cur = *((unsigned long long*)(&(r->direction.x)));
-    neg = *((unsigned long long*)(&(r->direction.x))) & 0x7fffffffffffffff;
-    tmp = (neg & reflected) | (cur & ~reflected);
-    r->direction.x = *((double*)(&tmp));
-    a |= (4u & reflected);
+        reflected = *((long long*)(&(r->direction.z)))>>63;
+        cur = *((unsigned long long*)(&(r->origin.z)));
+        neg = *((unsigned long long*)(&(r->origin.z))) ^ 0x8000000000000000;
+        tmp = (neg & reflected) | (cur & ~reflected);
+        r->origin.z = *((double*)(&tmp));
+        cur = *((unsigned long long*)(&(r->direction.z)));
+        neg = *((unsigned long long*)(&(r->direction.z))) & 0x7fffffffffffffff;
+        tmp = (neg & reflected) | (cur & ~reflected);
+        r->direction.z = *((double*)(&tmp));
+        a[i] |= (1u & reflected);
 
-    reflected = *((long long*)(&(r->direction.y)))>>63;
-    cur = *((unsigned long long*)(&(r->origin.y)));
-    neg = *((unsigned long long*)(&(r->origin.y))) ^ 0x8000000000000000;
-    tmp = (neg & reflected) | (cur & ~reflected);
-    r->origin.y = *((double*)(&tmp));
-    cur = *((unsigned long long*)(&(r->direction.y)));
-    neg = *((unsigned long long*)(&(r->direction.y))) & 0x7fffffffffffffff;
-    tmp = (neg & reflected) | (cur & ~reflected);
-    r->direction.y = *((double*)(&tmp));
-    a |= (2u & reflected);
+        // Improve IEEE double stability
+        double rdxInverse = 1.0 / r->direction.x;
+        double rdyInverse = 1.0 / r->direction.y;
+        double rdzInverse = 1.0 / r->direction.z;
 
-    reflected = *((long long*)(&(r->direction.z)))>>63;
-    cur = *((unsigned long long*)(&(r->origin.z)));
-    neg = *((unsigned long long*)(&(r->origin.z))) ^ 0x8000000000000000;
-    tmp = (neg & reflected) | (cur & ~reflected);
-    r->origin.z = *((double*)(&tmp));
-    cur = *((unsigned long long*)(&(r->direction.z)));
-    neg = *((unsigned long long*)(&(r->direction.z))) & 0x7fffffffffffffff;
-    tmp = (neg & reflected) | (cur & ~reflected);
-    r->direction.z = *((double*)(&tmp));
-    a |= (1u & reflected);
+        tx0[i] = (tree->min.x - r->origin.x) * rdxInverse;
+        tx1[i] = (tree->max.x - r->origin.x) * rdxInverse;
+        ty0[i] = (tree->min.y - r->origin.y) * rdyInverse;
+        ty1[i] = (tree->max.y - r->origin.y) * rdyInverse;
+        tz0[i] = (tree->min.z - r->origin.z) * rdzInverse;
+        tz1[i] = (tree->max.z - r->origin.z) * rdzInverse;
+        endpoints[i] = r->t_end;
+    }
 
-#ifdef DEBUG_RAY_PARAMETER
-    printf("After potential reflection, ray origin: (%lf, %lf, %lf); direction: (%lf, %lf, %lf), a: %u\n",
-           r->origin.x, r->origin.y, r->origin.z,
-           r->direction.x, r->direction.y, r->direction.z, a);
-#endif
+    free(rays);
 
-    // Improve IEEE double stability
-    double rdxInverse = 1.0 / r->direction.x;
-    double rdyInverse = 1.0 / r->direction.y;
-    double rdzInverse = 1.0 / r->direction.z;
-
-    double tx0 = (tree->min.x - r->origin.x) * rdxInverse;
-    double tx1 = (tree->max.x - r->origin.x) * rdxInverse;
-    double ty0 = (tree->min.y - r->origin.y) * rdyInverse;
-    double ty1 = (tree->max.y - r->origin.y) * rdyInverse;
-    double tz0 = (tree->min.z - r->origin.z) * rdzInverse;
-    double tz1 = (tree->max.z - r->origin.z) * rdzInverse;
-
-#ifdef DEBUG_RAY_PARAMETER
-    printf("txyz0: %lf %lf %lf\n", tx0, ty0, tz0);
-    printf("txyz1: %lf %lf %lf\n", tx1, ty1, tz1);
-#endif
-
-    // for now assume our point cloud origin and all points exist within the actree bounds
-    // if (MAX(MAX(tx0, ty0), tz0) < MIN(MIN(tx1, ty1), tz1))
-    // {
-        proc_subtree(tx0, ty0, tz0, tx1, ty1, tz1, 0, tree->root, a, r);
-    // }
-    // else
-    // {
-    //     printf("Ray outside of tree bounds\n");
+    // for(int i = 0; i < numRays; i++){
+        // for now assume our point cloud origin and all points exist within the actree bounds
+            // if (MAX(MAX(tx0, ty0), tz0) < MIN(MIN(tx1, ty1), tz1))
+            // {
+                proc_subtree(tx0, ty0, tz0, tx1, ty1, tz1, numRays, 0, tree->root, a, endpoints);
+            // }
+            // else
+            // {
+            //     printf("Ray outside of tree bounds\n");
+            // }
     // }
 }
 
@@ -924,15 +980,14 @@ void insertPointCloud(Octree* tree, Vector3d* points, size_t numPoints, Vector3d
         notInitialized = FALSE;
     }
 
+    Ray* rays = (Ray*)calloc(numPoints, sizeof(Ray));
+
     // for each point, create ray and call ray_parameter. After all points done, prune the tree
     for (size_t i = 0; i < numPoints; ++i)
     {
-        Ray currentRay;
-        initRay(&currentRay,
+        initRay((rays+i),
                 sensorOrigin->x, sensorOrigin->y, sensorOrigin->z,
                 points[i].x, points[i].y, points[i].z);
-
-        ray_parameter(tree, &currentRay);
 
         //printTree(tree);
         //printf("Finished ray %zu. Press Any Key to Continue\n", i);
@@ -946,6 +1001,8 @@ void insertPointCloud(Octree* tree, Vector3d* points, size_t numPoints, Vector3d
 
         //printf("Finished ray %zu\n", i);
     }
+
+    ray_parameter(tree, rays, numPoints);
 
     printf("Done inserting all rays, now pruning\n");
 
