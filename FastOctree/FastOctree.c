@@ -621,9 +621,156 @@ void ray_parameter_kernel(Octree* tree,
             valid[i + 1] = (int) cmp_hi[0]; // movss
         }
     }
-
 }
 
+
+int approximatelyEqual(double a, double b, double epsilon)
+{
+    return fabs(a - b) <= ( (fabs(a) < fabs(b) ? fabs(b) : fabs(a)) * epsilon);
+}
+
+int check_ray_parameter_kernel_correctness(Octree* tree, Vector3d* points, 
+											size_t numPoints, Vector3d* sensorOrigin)
+{
+	float* endpoints;
+    float* origin;
+    float* t0;
+    float* t1;
+    unsigned char* aVec;
+    int* valid;
+
+    // Allocate all of the memory for ray_parameter_kernel
+    posix_memalign((void**) &endpoints, 32, sizeof(float) * (4 * numPoints));
+    posix_memalign((void**) &origin, 32, sizeof(float) * 4);
+    posix_memalign((void**) &t0, 32, sizeof(float) * (4 * numPoints));
+    posix_memalign((void**) &t1, 32, sizeof(float) * (4 * numPoints));
+    posix_memalign((void**) &aVec, 32, sizeof(unsigned char) * numPoints);
+    posix_memalign((void**) &valid, 32, sizeof(int) * numPoints);
+
+    // Initialize endpoints and origin
+    for (size_t i = 0; i < numPoints; ++i)
+    {
+        endpoints[(4 * i)] = (float) points[i].x;
+        endpoints[(4 * i) + 1] = (float) points[i].y;
+        endpoints[(4 * i) + 2] = (float) points[i].z;
+        endpoints[(4 * i) + 3] = 0.0f;
+    }
+
+    origin[0] = (float) sensorOrigin->x;
+    origin[1] = (float) sensorOrigin->y;
+    origin[2] = (float) sensorOrigin->z;
+    origin[3] = 0.0f;
+
+    ray_parameter_kernel(tree, endpoints, numPoints, origin, t0, t1, aVec, valid);
+
+	for (size_t i = 0; i < numPoints; ++i)
+	{
+		Ray r;
+        initRay(&r,
+                sensorOrigin->x, sensorOrigin->y, sensorOrigin->z,
+                points[i].x, points[i].y, points[i].z);
+
+		unsigned char a = 0;
+
+		// Since the tree is centered at (0, 0, 0), reflecting the origins is as simple as negating them.
+		if (r.direction.x < 0.0f) {
+			r.origin.x = -r.origin.x;
+			r.direction.x = -r.direction.x;
+			a |= 4u;
+		}
+
+		if (r.direction.y < 0.0f) {
+			r.origin.y = -r.origin.y;
+			r.direction.y = -r.direction.y;
+			a |= 2u;
+		}
+
+		if (r.direction.z < 0.0f) {
+			r.origin.z = -r.origin.z;
+			r.direction.z = -r.direction.z;
+			a |= 1u;
+		}
+
+		// Improve IEEE double stability
+		double rdxInverse = 1.0 / r.direction.x;
+		double rdyInverse = 1.0 / r.direction.y;
+		double rdzInverse = 1.0 / r.direction.z;
+
+		double tx0 = (tree->min.x - r.origin.x) * rdxInverse;
+		double tx1 = (tree->max.x - r.origin.x) * rdxInverse;
+		double ty0 = (tree->min.y - r.origin.y) * rdyInverse;
+		double ty1 = (tree->max.y - r.origin.y) * rdyInverse;
+		double tz0 = (tree->min.z - r.origin.z) * rdzInverse;
+		double tz1 = (tree->max.z - r.origin.z) * rdzInverse;
+
+		int thisRayValid = (MAX(MAX(tx0, ty0), tz0) < MIN(MIN(tx1, ty1), tz1)); 
+		
+		int pointPassed = TRUE;
+		
+		if (aVec[i] != a) {
+			printf("Point %zu resulted in difference in a. kernel = %u, conditional = %u\n",
+				   i, aVec[i], a);
+		    pointPassed = FALSE;
+		}
+		
+		if (!((valid[i] && thisRayValid) || (!valid[i] && !thisRayValid))) {
+			printf("Point %zu resulted in difference in valid. kernel = %s, conditional = %s\n",
+				   i, (valid[i] ? "valid" : "invalid"), (thisRayValid ? "valid" : "invalid"));
+		    pointPassed = FALSE;
+		}
+		
+		if (!approximatelyEqual(tx0, t0[(4 * i)], 1e-6)) {
+			printf("Point %zu resulted in difference in tx0. kernel = %lg, conditional = %lg, diff = %lg\n",
+				   i, t0[(4 * i)], tx0, t0[(4 * i)] - tx0);
+		    pointPassed = FALSE;
+		}
+		
+		if (!approximatelyEqual(tx1, t1[(4 * i)], 1e-6)) {
+			printf("Point %zu resulted in difference in tx1. kernel = %lg, conditional = %lg, diff = %lg\n",
+				   i, t1[(4 * i)], tx1, t1[(4 * i)] - tx1);
+		    pointPassed = FALSE;
+		}
+		
+		if (!approximatelyEqual(ty0, t0[(4 * i) + 1], 1e-6)) {
+			printf("Point %zu resulted in difference in ty0. kernel = %lg, conditional = %lg, diff = %lg\n",
+				   i, t0[(4 * i) + 1], ty0, t0[(4 * i) + 1] - ty0);
+		    pointPassed = FALSE;
+		}
+		
+		if (!approximatelyEqual(ty1, t1[(4 * i) + 1], 1e-6)) {
+			printf("Point %zu resulted in difference in ty1. kernel = %lg, conditional = %lg, diff = %lg\n",
+				   i, t1[(4 * i) + 1], ty1, t1[(4 * i) + 1] - ty1);
+		    pointPassed = FALSE;
+		}
+		
+		if (!approximatelyEqual(tz0, t0[(4 * i) + 2], 1e-6)) {
+			printf("Point %zu resulted in difference in tz0. kernel = %lg, conditional = %lg, diff = %lg\n",
+				   i, t0[(4 * i) + 2], tz0, t0[(4 * i) + 2] - tz0);
+		    pointPassed = FALSE;
+		}
+		
+		if (!approximatelyEqual(tz1, t1[(4 * i) + 2], 1e-6)) {
+			printf("Point %zu resulted in difference in tz1. kernel = %lg, conditional = %lg, diff = %lg\n",
+				   i, t1[(4 * i) + 2], tz1, t1[(4 * i) + 2] - tz1);
+		    pointPassed = FALSE;
+		}
+		
+		if (!pointPassed) {
+			return FALSE;
+		}
+	}
+	
+	printf("ray_parameter_kernel was correct for all points\n");
+
+	free(endpoints);
+    free(origin);
+    free(t0);
+    free(t1);
+    free(aVec);
+    free(valid);
+
+	return 0;
+}
 
 void ray_parameter(Octree* tree, Ray* r) {
     int createdRoot = FALSE;

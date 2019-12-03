@@ -10,6 +10,7 @@
 #include "FastOctree.h"
 
 #define INSERT_RAY_BY_RAY 0
+#define CHECK_KERNEL_CORRECTNESS 1
 
 void printUsage(const char* self)
 {
@@ -73,11 +74,11 @@ int main(int argc, char** argv)
 	for (octomap::ScanGraph::iterator scan_it = graph->begin(); scan_it != graph->end(); scan_it++) {
 		timeval start = {}, stop = {};
 		gettimeofday(&start, NULL);  // start timer
-#if !INSERT_RAY_BY_RAY
+#if !INSERT_RAY_BY_RAY && !CHECK_KERNEL_CORRECTNESS
 		tree->insertPointCloud((*scan_it)->scan, (*scan_it)->pose.trans());
 #endif
         gettimeofday(&stop, NULL);  // start time
-#if !INSERT_RAY_BY_RAY
+#if !INSERT_RAY_BY_RAY && !CHECK_KERNEL_CORRECTNESS
 		std::stringstream filenameStream;
 		filenameStream << "octomap_nodes_after_pointcloud_" << currentScan << ".csv";
 		makeOctomapNodeCsv(filenameStream.str(), *tree);
@@ -89,7 +90,7 @@ int main(int argc, char** argv)
 			initVector3d(&sensorOrigin, sensorOriginOctomap.x(), sensorOriginOctomap.y(), sensorOriginOctomap.z());
 
 			static Vector3d pointsBuffer[300000] = {};
-#if INSERT_RAY_BY_RAY
+#if INSERT_RAY_BY_RAY || CHECK_KERNEL_CORRECTNESS
 			size_t numPoints = (*scan_it)->scan->size();
 #else
 			size_t numPoints = 10;
@@ -99,7 +100,7 @@ int main(int argc, char** argv)
 				const octomap::point3d& pt = (*scan_it)->scan->getPoint(i);
 				initVector3d(&(pointsBuffer[i]), pt.x(), pt.y(), pt.z());
 
-#if INSERT_RAY_BY_RAY
+#if INSERT_RAY_BY_RAY && !CHECK_KERNEL_CORRECTNESS
 				tree->insertRay((*scan_it)->pose.trans(), pt);
 				std::stringstream filenameStream;
 				filenameStream << "octomap_nodes_after_pointcloud_" << currentScan << "_point_" << i << ".csv";
@@ -111,7 +112,13 @@ int main(int argc, char** argv)
 				createNodeCsv(&fastOctree, fastOctreeFilenameStream.str().c_str());
 #endif
 			}
-#if !INSERT_RAY_BY_RAY
+			
+#if CHECK_KERNEL_CORRECTNESS
+			check_ray_parameter_kernel_correctness(&fastOctree, pointsBuffer, 
+											       numPoints, &sensorOrigin);
+#endif
+
+#if !INSERT_RAY_BY_RAY && !CHECK_KERNEL_CORRECTNESS
 			insertPointCloud(&fastOctree, pointsBuffer, numPoints, &sensorOrigin);
 
 			std::stringstream fastOctreeFilenameStream;

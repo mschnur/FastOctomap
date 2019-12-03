@@ -56,6 +56,9 @@ void createNodeCsv(Octree *tree, const char *filename);
 
 void insertPointCloud(Octree *tree, Vector3d *points, size_t numPoints, Vector3d *sensorOrigin);
 
+int check_ray_parameter_kernel_correctness(Octree* tree, Vector3d* points, 
+											size_t numPoints, Vector3d* sensorOrigin);
+
 /// compute log-odds from probability:
 static inline double logodds(double probability){
     return log(probability / (1.0 - probability));
