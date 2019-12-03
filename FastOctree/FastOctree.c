@@ -3,10 +3,12 @@
 //
 
 #include <assert.h>
+#include <immintrin.h>
 #include <math.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <stdint.h>
 
 #include "FastOctree.h"
 #include "Stack.h"
@@ -503,7 +505,11 @@ void proc_subtree(double tx0, double ty0, double tz0,
 
 #define DBL_SGN_BIT(x) ((unsigned long long)(*((unsigned long long*)(&(x))) & 0x8000000000000000) >> 63)
 
-void ray_parameter_kernel(Octree* tree, Vector3d* points, size_t numPoints, Vector3d* sensorOrigin) {
+void ray_parameter_kernel(Octree* tree,
+        float* endpoints, size_t numEndpoints,
+        float* origin,
+        float* t0, float* t1,
+        unsigned char* a, int* valid) {
     int createdRoot = FALSE;
     if (tree->root == NULL) {
         // Using calloc instead of malloc initializes the memory to zero, which means that the the root's `children`
@@ -514,6 +520,107 @@ void ray_parameter_kernel(Octree* tree, Vector3d* points, size_t numPoints, Vect
     }
 
     //TODO: implement kernel as described in kernel_analysis/Readme.md
+    for (size_t i = 0; i < numEndpoints; i += 2){
+        // Micro-kernel 1 v2: Calculate direction (single precision)
+        __m256d direction, originVec;
+
+        { // Scope this so that the temporaries can be reused
+            __m256 end = _mm256_load_ps(endpoints + (i * 8));
+            __m128 originHalfVec = _mm_load_ps(origin);
+            originVec = _mm256_set_m128(originHalfVec, originHalfVec);
+            __m256 diff = _mm256_sub_ps(end, originVec);
+            __m256 d2 = _mm256_mul_ps(diff, diff);
+            __m256 d2_shuf = _mm256_shuffle_ps(d2, d2, 0xB1);
+            __m256 part_sum = _mm256_add_ps(d2, d2_shuf);
+            // reuse the d2_shuf register
+            d2_shuf = _mm256_shuffle_ps(part_sum, part_sum, 0x4E);
+            __m256 magnitude = _mm256_add_ps(part_sum, d2_shuf);
+            magnitude = _mm256_rsqrt_ps(magnitude);
+            direction = _mm256_mul_ps(diff, magnitude);
+        }
+
+        // Micro-kernel 2: Reflect negative direction and calculate "a"
+        {
+            const __m256 fourTwoOne = _mm256_set_ps(4.f, 2.f, 1.f, 0.f, 4.f, 2.f, 1.f, 0.f);
+            union SignBitUnion {
+                uint32_t unsign;
+                int32_t sign;
+            };
+            static const union SignBitUnion signBitUnion = {.unsign = 0x80000000U};
+            const __m256i signBits = _mm256_set1_epi32(signBitUnion.sign);
+            __m256 floatSignBits = _mm256_castsi256_ps(signBits);
+            // Handle reflections when direction is negative
+            __m256 sign_bit_if_neg = _mm256_and_ps(direction, floatSignBits);
+            // Toggle sign bit of origin if negative
+            originVec = _mm256_xor_ps(originVec, sign_bit_if_neg);
+            // Clears sign bit from direction if direction was negative
+            direction = _mm256_andnot_ps(sign_bit_if_neg, direction);
+
+            // Calculate "a"
+            __m256 a_parts = _mm256_andnot_ps(sign_bit_if_neg, fourTwoOne);
+            // Convert a_parts into packed 32-bit signed integers
+            __m256i a_parts_int = _mm256_cvttps_epi32(a_parts);
+            // Swap elements 0 and 1 of both the upper and lower halves
+            __m256i a_parts_int_shuff1 = _mm256_shuffle_epi32(a_parts_int, 0xE1);
+            __m256i partial_a_int = _mm256_or_si256(a_parts_int, a_parts_int_shuff1);
+            // Put element 2 into slots 0 and 1 of both the upper and lower halves
+            a_parts_int_shuff1 = _mm256_shuffle_epi32(a_parts_int, 0xEA);
+            __m256i a_int = _mm256_or_si256(partial_a_int, a_parts_int_shuff1);
+            // Now elements 0, 1, and 2 of both the upper and lower halves of a_int contain the
+            // "a" value
+            a[i] = (unsigned char) _mm256_cvtsi256_si32(a_int);
+            __m256 a_int_hi = _mm256_unpackhi_epi32(a_int, a_int);
+            a[i + 1] = (unsigned char) _mm256cvtsi256_si32(a_int_hi);
+        }
+
+        // Micro-kernel 3: Compute t0 and t1
+        {
+            // All axes have the same minimum, so we don't actually need separate minX, minY, minZ
+            __m256 treeMins = _mm256_set1_ps((float) tree->min.x);
+            // Same with the maximums
+            __m256 treeMaxes = _mm256_set1_ps((float) tree->max.x);
+            // Get the reciprocal of the direction
+            __m256 dirInverse = _mm256_rcp_ps(direction);
+            __m256 t0Vec = _mm256_sub_ps(treeMins, originVec);
+            t0Vec = _mm256_mul_ps(t0Vec, dirInverse);
+            __m256 t1Vec = _mm256_sub_ps(treeMaxes, originVec);
+            t1Vec = _mm256_mul_ps(t1Vec, dirInverse);
+
+            // store t0 and t1 values
+            _mm256_store_ps(t0 + (i * 8), t0Vec);
+            _mm256_store_ps(t1 + (i * 8), t1Vec);
+        }
+
+        // Micro-kernel 4: Compare max of t0 and min of t1
+        {
+            __m256 t0Vec = _mm256_load_ps(t0 + (i * 8));
+            __m256 t1Vec = _mm256_load_ps(t1 + (i * 8));
+            // Swap elements 0 and 1 of both the upper and lower halves
+            __m256 shuffled = _mm256_shuffle_ps(t0Vec, t0Vec, 0xE1);
+            __m256 t0_max = _mm256_max_ps(t0Vec, shuffled);
+            // Put element 2 into slots 0 and 1 of both the upper and lower halves
+            shuffled = _mm256_shuffle_ps(t0Vec, t0Vec, 0xEA);
+            t0_max = _mm256_max_ps(t0_max, shuffled);
+            // Now elements 0, 1, and 2 of t0_max contain the max t0 value
+
+            // Swap elements 0 and 1 of both the upper and lower halves
+            shuffled = _mm256_shuffle_ps(t1Vec, t1Vec, 0xE1);
+            __m256 t1_min = _mm256_min_ps(t1Vec, shuffled);
+            // Put element 2 into slots 0 and 1 of both the upper and lower halves
+            shuffled = _mm256_shuffle_ps(t1Vec, t1Vec, 0xEA);
+            t1_min = _mm256_min_ps(t1_min, shuffled);
+            // Now elements 0, 1, and 2 of t1_min contain the min t1 value
+
+            // each 32-bit element in cmp_result will contain 0xFFFFFFFF if max
+            // is less than min for that index, otherwise it will contain 0
+            // vcmpps (0x11 == _CMP_LT_OQ == less-than, ordered, non-signaling)
+            __m256 cmp_result = _mm256_cmp_ps(t0_max, t1_min, 0x11);
+            valid[i] = (int) _mm256_cvtss_f32(cmp_result); // movss
+            __m256 cmp_hi = _mm256_unpackhi_ps(cmp_result, cmp_result); // vunpckhps
+            valid[i + 1] = (int) _mm256_cvtss_f32(cmp_hi); // movss
+        }
+    }
+
 }
 
 
@@ -908,6 +1015,37 @@ void insertPointCloud(Octree* tree, Vector3d* points, size_t numPoints, Vector3d
         OCC_PROB_THRES_LOG = logodds(0.5);
         notInitialized = FALSE;
     }
+
+    float* endpoints;
+    float* origin;
+    float* t0;
+    float* t1;
+    unsigned char* a;
+    int* valid;
+
+    // Allocate all of the memory for ray_parameter_kernel
+    posix_memalign((void**) &endpoints, 32, sizeof(float) * (4 * numPoints));
+    posix_memalign((void**) &origin, 32, sizeof(float) * 4);
+    posix_memalign((void**) &t0, 32, sizeof(float) * (4 * numPoints));
+    posix_memalign((void**) &t1, 32, sizeof(float) * (4 * numPoints));
+    posix_memalign((void**) &a, 32, sizeof(unsigned char) * numPoints);
+    posix_memalign((void**) &valid, 32, sizeof(int) * numPoints);
+
+    // Initialize endpoints and origin
+    for (size_t i = 0; i < numPoints; ++i)
+    {
+        endpoints[(4 * i)] = (float) points[i].x;
+        endpoints[(4 * i) + 1] = (float) points[i].y;
+        endpoints[(4 * i) + 2] = (float) points[i].z;
+        endpoints[(4 * i) + 3] = 0.0f;
+    }
+
+    origin[0] = (float) sensorOrigin->x;
+    origin[1] = (float) sensorOrigin->y;
+    origin[2] = (float) sensorOrigin->z;
+    origin[3] = 0.0f;
+
+    ray_parameter_kernel(tree, endpoints, numPoints, origin, t0, t1, a, valid);
 
     // for each point, create ray and call ray_parameter. After all points done, prune the tree
     for (size_t i = 0; i < numPoints; ++i)
