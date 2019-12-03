@@ -256,7 +256,7 @@ void proc_subtree(double* tx0, double* ty0, double* tz0,
                     printf("depth is equal to MAX_DEPTH, so updating the log likelihood of this node\n");
             #endif
 
-            if (any_is_greater(endpoint[i], endpoint[i], endpoint[i], tx1[i], ty1[i], tz1[i])) {
+            if (!any_is_greater(endpoint[i], endpoint[i], endpoint[i], tx1[i], ty1[i], tz1[i])) {
                 #ifdef DEBUG_PROC_SUBTREE
                             printf("r->t_end is greater than any of tx1, ty1, and tz1; voting a MISS\n");
                 #endif
@@ -276,9 +276,9 @@ void proc_subtree(double* tx0, double* ty0, double* tz0,
 
         double logLikelihoodUpdate = 0.0;
         if(hits > 0){
-            logLikelihoodUpdate = PROB_MISS_LOG;
-        } else {
             logLikelihoodUpdate = PROB_HIT_LOG;
+        } else {
+            logLikelihoodUpdate = PROB_MISS_LOG;
         }
 
         // Do the update
