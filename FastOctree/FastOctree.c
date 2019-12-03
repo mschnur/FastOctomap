@@ -9,6 +9,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <stdint.h>
+#include <sys/types.h>
 
 #include "FastOctree.h"
 #include "Stack.h"
@@ -522,12 +523,12 @@ void ray_parameter_kernel(Octree* tree,
     //TODO: implement kernel as described in kernel_analysis/Readme.md
     for (size_t i = 0; i < numEndpoints; i += 2){
         // Micro-kernel 1 v2: Calculate direction (single precision)
-        __m256d direction, originVec;
+        __m256 direction, originVec;
 
         { // Scope this so that the temporaries can be reused
             __m256 end = _mm256_load_ps(endpoints + (i * 8));
             __m128 originHalfVec = _mm_load_ps(origin);
-            originVec = _mm256_set_m128(originHalfVec, originHalfVec);
+            originVec = _mm256_insertf128_ps(_mm256_castps128_ps256(originHalfVec), originHalfVec, 1);
             __m256 diff = _mm256_sub_ps(end, originVec);
             __m256 d2 = _mm256_mul_ps(diff, diff);
             __m256 d2_shuf = _mm256_shuffle_ps(d2, d2, 0xB1);
@@ -568,9 +569,9 @@ void ray_parameter_kernel(Octree* tree,
             __m256i a_int = _mm256_or_si256(partial_a_int, a_parts_int_shuff1);
             // Now elements 0, 1, and 2 of both the upper and lower halves of a_int contain the
             // "a" value
-            a[i] = (unsigned char) _mm256_cvtsi256_si32(a_int);
-            __m256 a_int_hi = _mm256_unpackhi_epi32(a_int, a_int);
-            a[i + 1] = (unsigned char) _mm256cvtsi256_si32(a_int_hi);
+            a[i] = (unsigned char) ((__v8si) a_int)[0];
+            __m256i a_int_hi = _mm256_unpackhi_epi32(a_int, a_int);
+            a[i + 1] = (unsigned char) ((__v8si) a_int_hi)[0];
         }
 
         // Micro-kernel 3: Compute t0 and t1
@@ -615,9 +616,9 @@ void ray_parameter_kernel(Octree* tree,
             // is less than min for that index, otherwise it will contain 0
             // vcmpps (0x11 == _CMP_LT_OQ == less-than, ordered, non-signaling)
             __m256 cmp_result = _mm256_cmp_ps(t0_max, t1_min, 0x11);
-            valid[i] = (int) _mm256_cvtss_f32(cmp_result); // movss
+            valid[i] = (int) cmp_result[0]; // movss
             __m256 cmp_hi = _mm256_unpackhi_ps(cmp_result, cmp_result); // vunpckhps
-            valid[i + 1] = (int) _mm256_cvtss_f32(cmp_hi); // movss
+            valid[i + 1] = (int) cmp_hi[0]; // movss
         }
     }
 
@@ -656,8 +657,6 @@ void ray_parameter(Octree* tree, Ray* r) {
         printf("X component of ray is negative, reflecting.\n");
 #endif
     }
-
-    signbit(r->direction.y)
 
     if (r->direction.y < 0.0f) {
         r->origin.y = -r->origin.y;
