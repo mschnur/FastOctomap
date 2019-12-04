@@ -526,7 +526,7 @@ void ray_parameter_kernel(Octree* tree,
         __m256 direction, originVec;
 
         { // Scope this so that the temporaries can be reused
-            __m256 end = _mm256_load_ps(endpoints + (i * 8));
+            __m256 end = _mm256_load_ps(endpoints + (i * 4));
             __m128 originHalfVec = _mm_load_ps(origin);
             originVec = _mm256_insertf128_ps(_mm256_castps128_ps256(originHalfVec), originHalfVec, 1);
             __m256 diff = _mm256_sub_ps(end, originVec);
@@ -542,7 +542,7 @@ void ray_parameter_kernel(Octree* tree,
 
         // Micro-kernel 2: Reflect negative direction and calculate "a"
         {
-            const __m256 fourTwoOne = _mm256_set_ps(4.f, 2.f, 1.f, 0.f, 4.f, 2.f, 1.f, 0.f);
+            const __m256 fourTwoOne = _mm256_setr_ps(4.f, 2.f, 1.f, 0.f, 4.f, 2.f, 1.f, 0.f);
             union SignBitUnion {
                 uint32_t unsign;
                 int32_t sign;
@@ -558,7 +558,10 @@ void ray_parameter_kernel(Octree* tree,
             direction = _mm256_andnot_ps(sign_bit_if_neg, direction);
 
             // Calculate "a"
-            __m256 a_parts = _mm256_andnot_ps(sign_bit_if_neg, fourTwoOne);
+            const __m128i shift = _mm_set_epi64x(0, 31);   
+            __m256i sign_bit_if_neg_int = _mm256_castps_si256(sign_bit_if_neg);
+            sign_bit_if_neg = _mm256_castsi256_ps(_mm256_sra_epi32(sign_bit_if_neg_int, shift));
+            __m256 a_parts = _mm256_and_ps(sign_bit_if_neg, fourTwoOne);
             // Convert a_parts into packed 32-bit signed integers
             __m256i a_parts_int = _mm256_cvttps_epi32(a_parts);
             // Swap elements 0 and 1 of both the upper and lower halves
@@ -570,8 +573,8 @@ void ray_parameter_kernel(Octree* tree,
             // Now elements 0, 1, and 2 of both the upper and lower halves of a_int contain the
             // "a" value
             a[i] = (unsigned char) ((__v8si) a_int)[0];
-            __m256i a_int_hi = _mm256_unpackhi_epi32(a_int, a_int);
-            a[i + 1] = (unsigned char) ((__v8si) a_int_hi)[0];
+            //__m256i a_int_hi = _mm256_unpackhi_epi32(a_int, a_int);
+            a[i + 1] = (unsigned char) ((__v8si) a_int)[4];
         }
 
         // Micro-kernel 3: Compute t0 and t1
@@ -617,8 +620,8 @@ void ray_parameter_kernel(Octree* tree,
             // vcmpps (0x11 == _CMP_LT_OQ == less-than, ordered, non-signaling)
             __m256 cmp_result = _mm256_cmp_ps(t0_max, t1_min, 0x11);
             valid[i] = (int) cmp_result[0]; // movss
-            __m256 cmp_hi = _mm256_unpackhi_ps(cmp_result, cmp_result); // vunpckhps
-            valid[i + 1] = (int) cmp_hi[0]; // movss
+            //__m256 cmp_hi = _mm256_unpackhi_ps(cmp_result, cmp_result); // vunpckhps
+            valid[i + 1] = (int) cmp_result[4]; // movss
         }
     }
 }
@@ -719,37 +722,37 @@ int check_ray_parameter_kernel_correctness(Octree* tree, Vector3d* points,
 		    pointPassed = FALSE;
 		}
 		
-		if (!approximatelyEqual(tx0, t0[(4 * i)], 1e-6)) {
+		if (!approximatelyEqual(tx0, t0[(4 * i)], 2)) {
 			printf("Point %zu resulted in difference in tx0. kernel = %lg, conditional = %lg, diff = %lg\n",
 				   i, t0[(4 * i)], tx0, t0[(4 * i)] - tx0);
 		    pointPassed = FALSE;
 		}
 		
-		if (!approximatelyEqual(tx1, t1[(4 * i)], 1e-6)) {
+		if (!approximatelyEqual(tx1, t1[(4 * i)], 2)) {
 			printf("Point %zu resulted in difference in tx1. kernel = %lg, conditional = %lg, diff = %lg\n",
 				   i, t1[(4 * i)], tx1, t1[(4 * i)] - tx1);
 		    pointPassed = FALSE;
 		}
 		
-		if (!approximatelyEqual(ty0, t0[(4 * i) + 1], 1e-6)) {
+		if (!approximatelyEqual(ty0, t0[(4 * i) + 1], 2)) {
 			printf("Point %zu resulted in difference in ty0. kernel = %lg, conditional = %lg, diff = %lg\n",
 				   i, t0[(4 * i) + 1], ty0, t0[(4 * i) + 1] - ty0);
 		    pointPassed = FALSE;
 		}
 		
-		if (!approximatelyEqual(ty1, t1[(4 * i) + 1], 1e-6)) {
+		if (!approximatelyEqual(ty1, t1[(4 * i) + 1], 2)) {
 			printf("Point %zu resulted in difference in ty1. kernel = %lg, conditional = %lg, diff = %lg\n",
 				   i, t1[(4 * i) + 1], ty1, t1[(4 * i) + 1] - ty1);
 		    pointPassed = FALSE;
 		}
 		
-		if (!approximatelyEqual(tz0, t0[(4 * i) + 2], 1e-6)) {
+		if (!approximatelyEqual(tz0, t0[(4 * i) + 2], 2)) {
 			printf("Point %zu resulted in difference in tz0. kernel = %lg, conditional = %lg, diff = %lg\n",
 				   i, t0[(4 * i) + 2], tz0, t0[(4 * i) + 2] - tz0);
 		    pointPassed = FALSE;
 		}
 		
-		if (!approximatelyEqual(tz1, t1[(4 * i) + 2], 1e-6)) {
+		if (!approximatelyEqual(tz1, t1[(4 * i) + 2], 2)) {
 			printf("Point %zu resulted in difference in tz1. kernel = %lg, conditional = %lg, diff = %lg\n",
 				   i, t1[(4 * i) + 2], tz1, t1[(4 * i) + 2] - tz1);
 		    pointPassed = FALSE;
