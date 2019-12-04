@@ -676,6 +676,191 @@ void ray_parameter_conditional(Octree* tree,
     }
 }
 
+static const uint64_t SIGN_BIT_ONLY = 0x8000000000000000ull;
+static const uint64_t ALL_BUT_SIGN_BIT = 0x7FFFFFFFFFFFFFFFull;
+
+// sign_bit_if_neg = directionX & 0x8000000000000000;
+// originX = originX XOR sign_bit_if_neg;
+// directionX = directionX & 0x7FFFFFFFFFFFFFFF;
+// sign_bit_if_neg = sign_bit_if_neg >> 63; // right shift sign-extend
+// partial_a = a_number & sign_bit_if_neg;
+// local_a = local_a | partial_a;
+#define REFLECT_AND_SET_A_WITHOUT_CONDITION(direction, origin, local_a, a_number) \
+    { \
+        __asm__ __volatile__( \
+            "mov %[dir], %%r8\n\t" \
+            "or %[signBit], %%r8 \n\t" \
+            "xor %%r8, %[ori]\n\t" \
+            "and %[allButSignBit], %[dir]\n\t" \
+            "sar $63, %%r8\n\t" \
+            "mov %[a_num], %%r9\n\t" \
+            "or %%r9, %[loc_a]\n\t" \
+            : [dir] "+r" (direction), \
+              [ori] "+r" (origin), \
+              [loc_a] "+r" (local_a) \
+            : [signBit] "r" (SIGN_BIT_ONLY), \
+              [allButSignBit] "r" (ALL_BUT_SIGN_BIT), \
+              [a_num] "g" (a_number) \
+            : "r8", "r9" \
+        ); \
+    }
+    //"movabsq $0x7FFFFFFFFFFFFFFF, %r11\n\t"
+    /*
+     * [signBit] "rm" (0x8000000000000000ull), \
+              [allButSignBit] "rm" (0x7FFFFFFFFFFFFFFFull) \
+     */
+
+void ray_parameter_removed_conditional(Octree* tree,
+                                       Vector3d* points,
+                                       size_t numPoints, Vector3d* sensorOrigin,
+                                       double* t0, double* t1,
+                                       unsigned char* a, int* valid)
+{
+    for (size_t i = 0; i < numPoints; ++i) {
+        Ray r;
+        initRay(&r,
+                sensorOrigin->x, sensorOrigin->y, sensorOrigin->z,
+                points[i].x, points[i].y, points[i].z);
+
+        unsigned char local_a = 0;
+
+        long long reflected, neg, cur, tmp, sign_bit_if_negative;
+
+        // sign_bit_if_neg = directionX & 0x8000000000000000;
+        // originX = originX XOR sign_bit_if_neg;
+        // directionX = directionX & 0x7FFFFFFFFFFFFFFF;
+        // sign_bit_if_neg = sign_bit_if_neg >> 63; // right shift sign-extend
+        // partial_a = a_number & sign_bit_if_neg;
+        // local_a = local_a | partial_a;
+
+        cur = *((unsigned long long*)(&(r.direction.x)));
+        sign_bit_if_negative = cur & 0x8000000000000000ull;
+        tmp = *((unsigned long long*)(&(r.origin.x)));
+        tmp ^= sign_bit_if_negative;
+        r.origin.x = *((double*)(&tmp));
+        tmp = cur & 0x7fffffffffffffffull;
+        r.direction.x = *((double*)(&tmp));
+        reflected = *((long long*)(&sign_bit_if_negative))>>63;
+        local_a |= (4u & reflected);
+
+        cur = *((unsigned long long*)(&(r.direction.y)));
+        sign_bit_if_negative = cur & 0x8000000000000000ull;
+        tmp = *((unsigned long long*)(&(r.origin.y)));
+        tmp ^= sign_bit_if_negative;
+        r.origin.y = *((double*)(&tmp));
+        tmp = cur & 0x7fffffffffffffffull;
+        r.direction.y = *((double*)(&tmp));
+        reflected = *((long long*)(&sign_bit_if_negative))>>63;
+        local_a |= (2u & reflected);
+
+        cur = *((unsigned long long*)(&(r.direction.z)));
+        sign_bit_if_negative = cur & 0x8000000000000000ull;
+        tmp = *((unsigned long long*)(&(r.origin.z)));
+        tmp ^= sign_bit_if_negative;
+        r.origin.z = *((double*)(&tmp));
+        tmp = cur & 0x7fffffffffffffffull;
+        r.direction.z = *((double*)(&tmp));
+        reflected = *((long long*)(&sign_bit_if_negative))>>63;
+        local_a |= (1u & reflected);
+
+        /*
+        reflected = *((long long*)(&(r.direction.x)))>>63;
+        cur = *((unsigned long long*)(&(r.origin.x)));
+        neg = *((unsigned long long*)(&(r.origin.x))) ^ 0x8000000000000000;
+        tmp = (neg & reflected) | (cur & ~reflected);
+        r.origin.x = *((double*)(&tmp));
+        cur = *((unsigned long long*)(&(r.direction.x)));
+        neg = *((unsigned long long*)(&(r.direction.x))) & 0x7fffffffffffffff;
+        tmp = (neg & reflected) | (cur & ~reflected);
+        r.direction.x = *((double*)(&tmp));
+        local_a |= (4u & reflected);
+
+        reflected = *((long long*)(&(r.direction.y)))>>63;
+        cur = *((unsigned long long*)(&(r.origin.y)));
+        neg = *((unsigned long long*)(&(r.origin.y))) ^ 0x8000000000000000;
+        tmp = (neg & reflected) | (cur & ~reflected);
+        r.origin.y = *((double*)(&tmp));
+        cur = *((unsigned long long*)(&(r.direction.y)));
+        neg = *((unsigned long long*)(&(r.direction.y))) & 0x7fffffffffffffff;
+        tmp = (neg & reflected) | (cur & ~reflected);
+        r.direction.y = *((double*)(&tmp));
+        local_a |= (2u & reflected);
+
+        reflected = *((long long*)(&(r.direction.z)))>>63;
+        cur = *((unsigned long long*)(&(r.origin.z)));
+        neg = *((unsigned long long*)(&(r.origin.z))) ^ 0x8000000000000000;
+        tmp = (neg & reflected) | (cur & ~reflected);
+        r.origin.z = *((double*)(&tmp));
+        cur = *((unsigned long long*)(&(r.direction.z)));
+        neg = *((unsigned long long*)(&(r.direction.z))) & 0x7fffffffffffffff;
+        tmp = (neg & reflected) | (cur & ~reflected);
+        r.direction.z = *((double*)(&tmp));
+        local_a |= (1u & reflected);
+*/
+        // Improve IEEE double stability
+        double rdxInverse = 1.0 / r.direction.x;
+        double rdyInverse = 1.0 / r.direction.y;
+        double rdzInverse = 1.0 / r.direction.z;
+
+        double tx0 = (tree->min.x - r.origin.x) * rdxInverse;
+        double tx1 = (tree->max.x - r.origin.x) * rdxInverse;
+        double ty0 = (tree->min.y - r.origin.y) * rdyInverse;
+        double ty1 = (tree->max.y - r.origin.y) * rdyInverse;
+        double tz0 = (tree->min.z - r.origin.z) * rdzInverse;
+        double tz1 = (tree->max.z - r.origin.z) * rdzInverse;
+
+        a[i] = local_a;
+        valid[i] = (MAX(MAX(tx0, ty0), tz0) < MIN(MIN(tx1, ty1), tz1));
+        t0[(i * 4)] = tx0;
+        t0[(i * 4) + 1] = ty0;
+        t0[(i * 4) + 2] = tz0;
+        t1[(i * 4)] = tx1;
+        t1[(i * 4) + 1] = ty1;
+        t1[(i * 4) + 2] = tz1;
+    }
+}
+
+void ray_parameter_removed_conditional_asm(Octree* tree,
+                                       Vector3d* points,
+                                       size_t numPoints, Vector3d* sensorOrigin,
+                                       double* t0, double* t1,
+                                       unsigned char* a, int* valid)
+{
+    for (size_t i = 0; i < numPoints; ++i) {
+        Ray r;
+        initRay(&r,
+                sensorOrigin->x, sensorOrigin->y, sensorOrigin->z,
+                points[i].x, points[i].y, points[i].z);
+
+        uint64_t local_a = 0;
+
+        REFLECT_AND_SET_A_WITHOUT_CONDITION(r.direction.x, r.origin.x, local_a, 4);
+        REFLECT_AND_SET_A_WITHOUT_CONDITION(r.direction.y, r.origin.y, local_a, 2);
+        REFLECT_AND_SET_A_WITHOUT_CONDITION(r.direction.z, r.origin.z, local_a, 1);
+
+        // Improve IEEE double stability
+        double rdxInverse = 1.0 / r.direction.x;
+        double rdyInverse = 1.0 / r.direction.y;
+        double rdzInverse = 1.0 / r.direction.z;
+
+        double tx0 = (tree->min.x - r.origin.x) * rdxInverse;
+        double tx1 = (tree->max.x - r.origin.x) * rdxInverse;
+        double ty0 = (tree->min.y - r.origin.y) * rdyInverse;
+        double ty1 = (tree->max.y - r.origin.y) * rdyInverse;
+        double tz0 = (tree->min.z - r.origin.z) * rdzInverse;
+        double tz1 = (tree->max.z - r.origin.z) * rdzInverse;
+
+        a[i] = (unsigned char) local_a;
+        valid[i] = (MAX(MAX(tx0, ty0), tz0) < MIN(MIN(tx1, ty1), tz1));
+        t0[(i * 4)] = tx0;
+        t0[(i * 4) + 1] = ty0;
+        t0[(i * 4) + 2] = tz0;
+        t1[(i * 4)] = tx1;
+        t1[(i * 4) + 1] = ty1;
+        t1[(i * 4) + 2] = tz1;
+    }
+}
+
 
 int approximatelyEqual(double a, double b, double epsilon)
 {
@@ -768,8 +953,43 @@ void compare_ray_parameter_times(Octree* tree, Vector3d* points,
     unsigned long long conditional_avg_total = (conditional_time_diff / 100ull) * NOMINAL_TO_BOOST_FREQUENCY_FACTOR;
     unsigned long long conditional_avg_per_point = conditional_avg_total / numPoints;
 
-    printf("Kernel: cycles/cloud avg = %llu, cycles/point avg = %llu\n", kernel_avg_total, kernel_avg_per_point);
+    st = rdtsc();
+    for (int i = 0; i < 1; ++i)
+    {
+        DO_HUNDRED_TIMES(
+                ray_parameter_removed_conditional(tree, points,
+                                          numPoints, sensorOrigin,
+                                          t0_conditional, t1_conditional,
+                                          aVec_conditional, valid_conditional);
+        )
+    }
+    et = rdtsc();
+
+    unsigned long long unconditional_time_diff = et - st;
+    unsigned long long unconditional_avg_total = (unconditional_time_diff / 100ull) * NOMINAL_TO_BOOST_FREQUENCY_FACTOR;
+    unsigned long long unconditional_avg_per_point = unconditional_avg_total / numPoints;
+
+    st = rdtsc();
+    for (int i = 0; i < 1; ++i)
+    {
+        DO_HUNDRED_TIMES(
+                ray_parameter_removed_conditional_asm(tree, points,
+                                                  numPoints, sensorOrigin,
+                                                  t0_conditional, t1_conditional,
+                                                  aVec_conditional, valid_conditional);
+        )
+    }
+    et = rdtsc();
+
+    unsigned long long unconditional_asm_time_diff = et - st;
+    unsigned long long unconditional_asm_avg_total = (unconditional_asm_time_diff / 100ull) * NOMINAL_TO_BOOST_FREQUENCY_FACTOR;
+    unsigned long long unconditional_asm_avg_per_point = unconditional_asm_avg_total / numPoints;
+
+
     printf("Conditional: cycles/cloud avg = %llu, cycles/point avg = %llu\n", conditional_avg_total, conditional_avg_per_point);
+    printf("Removed Conditions: cycles/cloud avg = %llu, cycles/point avg = %llu\n", unconditional_avg_total, unconditional_avg_per_point);
+    printf("Removed Conditions - Assembly: cycles/cloud avg = %llu, cycles/point avg = %llu\n", unconditional_asm_avg_total, unconditional_asm_avg_per_point);
+    printf("SIMD: cycles/cloud avg = %llu, cycles/point avg = %llu\n", kernel_avg_total, kernel_avg_per_point);
 
     free(endpoints);
     free(origin);
