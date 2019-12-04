@@ -65,12 +65,12 @@ static const size_t FastOctree_to_octomap_index_map[8] = {
 // Utility functions
 //###########################################################################################
 
-static inline int nodeHasAnyChildren(const Node* n)
+static inline __attribute__((always_inline)) int nodeHasAnyChildren(const Node* n)
 {
     return (memcmp(n->children, NO_CHILDREN, 8 * sizeof(Node*)) != 0);
 }
 
-static inline int nodeIsPrunable(const Node* n)
+static inline __attribute__((always_inline)) int nodeIsPrunable(const Node* n)
 {
     // If all of this node's children have the same log-likelihood and have no children themselves, then we can
     // prune these children, meaning we delete them.
@@ -86,14 +86,14 @@ static inline int nodeIsPrunable(const Node* n)
     return TRUE;
 }
 
-static inline void deleteChild(Node* n, unsigned int childIndex)
+static inline __attribute__((always_inline)) void deleteChild(Node* n, unsigned int childIndex)
 {
     free(n->children[childIndex]);
     n->children[childIndex] = NULL;
 }
 
 
-static inline void deleteAllChildren(Node* n)
+static inline __attribute__((always_inline)) void deleteAllChildren(Node* n)
 {
     for (unsigned int i = 0; i < 8; ++i)
     {
@@ -101,7 +101,7 @@ static inline void deleteAllChildren(Node* n)
     }
 }
 
-static inline void createChild(Node* n, unsigned int childIndex)
+static inline __attribute__((always_inline)) void createChild(Node* n, unsigned int childIndex)
 {
     // In order for us to be able to free the nodes individually (which may happen during pruning) we need to
     // allocate each node separately, instead of the whole array at once. Using calloc instead of malloc
@@ -110,7 +110,7 @@ static inline void createChild(Node* n, unsigned int childIndex)
     n->children[childIndex] = (Node*) calloc(1, sizeof(Node));
 }
 
-static inline int createChildIfItDoesntExist(Node* n, unsigned int childIndex)
+static inline __attribute__((always_inline)) int createChildIfItDoesntExist(Node* n, unsigned int childIndex)
 {
     if (n->children[childIndex] == NO_CHILD)
     {
@@ -121,7 +121,7 @@ static inline int createChildIfItDoesntExist(Node* n, unsigned int childIndex)
     return FALSE;
 }
 
-static inline double maxChildLogLikelihood(const Node* n)
+static inline __attribute__((always_inline)) double maxChildLogLikelihood(const Node* n)
 {
     double maxLogLikelihood = -INFINITY;
     for (unsigned int i = 0; i < 8; ++i)
@@ -146,7 +146,7 @@ static inline double maxChildLogLikelihood(const Node* n)
     return maxLogLikelihood;
 }
 
-static inline void expandPrunedNode(Node* n)
+static inline __attribute__((always_inline)) void expandPrunedNode(Node* n)
 {
     assert(!nodeHasAnyChildren(n));
 
@@ -159,31 +159,31 @@ static inline void expandPrunedNode(Node* n)
     }
 }
 
-static inline int is_less(double pointX, double pointY, double pointZ,
+static inline __attribute__((always_inline)) int is_less(double pointX, double pointY, double pointZ,
                    double minX, double minY, double minZ)
 {
     return (minX > pointX && minY > pointY && minZ > pointZ);
 }
 
-static inline int is_greater(double pointX, double pointY, double pointZ,
+static inline __attribute__((always_inline)) int is_greater(double pointX, double pointY, double pointZ,
                       double maxX, double maxY, double maxZ)
 {
     return (pointX > maxX && pointY > maxY && pointZ > maxZ);
 }
 
-static inline int any_is_less(double pointX, double pointY, double pointZ,
+static inline __attribute__((always_inline)) int any_is_less(double pointX, double pointY, double pointZ,
                           double minX, double minY, double minZ)
 {
     return (minX > pointX || minY > pointY || minZ > pointZ);
 }
 
-static inline int any_is_greater(double pointX, double pointY, double pointZ,
+static inline __attribute__((always_inline)) int any_is_greater(double pointX, double pointY, double pointZ,
                              double maxX, double maxY, double maxZ)
 {
     return (pointX > maxX || pointY > maxY || pointZ > maxZ);
 }
 
-static inline int is_between(double minX, double minY, double minZ,
+static inline __attribute__((always_inline)) int is_between(double minX, double minY, double minZ,
                       double pointX, double pointY, double pointZ,
                       double maxX, double maxY, double maxZ)
 {
@@ -192,7 +192,7 @@ static inline int is_between(double minX, double minY, double minZ,
             minZ <= pointZ && pointZ <= maxZ);
 }
 
-static inline int is_between_vector3d(const Vector3d* min,
+static inline __attribute__((always_inline)) int is_between_vector3d(const Vector3d* min,
                                const Vector3d* point,
                                const Vector3d* max)
 {
@@ -524,6 +524,7 @@ void ray_parameter_kernel(Octree* tree,
         __m256 direction, originVec;
 
         { // Scope this so that the temporaries can be reused
+            __m256 threes = _mm256_set1_ps(3.0f), halves = _mm256_set1_ps(0.5f);
             __m256 end = _mm256_load_ps(endpoints + (i * 4));
             __m128 originHalfVec = _mm_load_ps(origin);
             originVec = _mm256_insertf128_ps(_mm256_castps128_ps256(originHalfVec), originHalfVec, 1);
@@ -534,8 +535,13 @@ void ray_parameter_kernel(Octree* tree,
             // reuse the d2_shuf register
             d2_shuf = _mm256_shuffle_ps(part_sum, part_sum, 0x4E);
             __m256 magnitude = _mm256_add_ps(part_sum, d2_shuf);
-            magnitude = _mm256_rsqrt_ps(magnitude);
-            direction = _mm256_mul_ps(diff, magnitude);
+            __m256 rsqrt_magnitude = _mm256_rsqrt_ps(magnitude);
+
+            // 1 iteration of Newton-Raphson can double accuracy, so do that
+            __m256 product = _mm256_mul_ps(_mm256_mul_ps(magnitude, rsqrt_magnitude), rsqrt_magnitude);
+            rsqrt_magnitude = _mm256_mul_ps(_mm256_mul_ps(halves, rsqrt_magnitude), _mm256_sub_ps(threes, product));
+
+            direction = _mm256_mul_ps(diff, rsqrt_magnitude);
         }
 
         // Micro-kernel 2: Reflect negative direction and calculate "a"
@@ -579,6 +585,11 @@ void ray_parameter_kernel(Octree* tree,
             __m256 treeMaxes = _mm256_set1_ps((float) tree->max.x);
             // Get the reciprocal of the direction
             __m256 dirInverse = _mm256_rcp_ps(direction);
+
+            // 1 iteration of Newton-Raphson can double accuracy, so do that
+            __m256 product = _mm256_mul_ps(direction, _mm256_mul_ps(dirInverse, dirInverse));
+            dirInverse = _mm256_sub_ps(_mm256_add_ps(dirInverse, dirInverse), product);
+
             __m256 t0Vec = _mm256_sub_ps(treeMins, originVec);
             t0Vec = _mm256_mul_ps(t0Vec, dirInverse);
             __m256 t1Vec = _mm256_sub_ps(treeMaxes, originVec);
@@ -1093,38 +1104,40 @@ int check_ray_parameter_kernel_correctness(Octree* tree, Vector3d* points,
 				   i, (valid[i] ? "valid" : "invalid"), (thisRayValid ? "valid" : "invalid"));
 		    pointPassed = FALSE;
 		}
-		
-		if (!approximatelyEqual(tx0, t0[(4 * i)], 2)) {
+
+		double allowedEpsilon = 1e-6;
+
+		if (!approximatelyEqual(tx0, t0[(4 * i)], allowedEpsilon)) {
 			printf("Point %zu resulted in difference in tx0. kernel = %lg, conditional = %lg, diff = %lg\n",
 				   i, t0[(4 * i)], tx0, t0[(4 * i)] - tx0);
 		    pointPassed = FALSE;
 		}
 		
-		if (!approximatelyEqual(tx1, t1[(4 * i)], 2)) {
+		if (!approximatelyEqual(tx1, t1[(4 * i)], allowedEpsilon)) {
 			printf("Point %zu resulted in difference in tx1. kernel = %lg, conditional = %lg, diff = %lg\n",
 				   i, t1[(4 * i)], tx1, t1[(4 * i)] - tx1);
 		    pointPassed = FALSE;
 		}
 		
-		if (!approximatelyEqual(ty0, t0[(4 * i) + 1], 2)) {
+		if (!approximatelyEqual(ty0, t0[(4 * i) + 1], allowedEpsilon)) {
 			printf("Point %zu resulted in difference in ty0. kernel = %lg, conditional = %lg, diff = %lg\n",
 				   i, t0[(4 * i) + 1], ty0, t0[(4 * i) + 1] - ty0);
 		    pointPassed = FALSE;
 		}
 		
-		if (!approximatelyEqual(ty1, t1[(4 * i) + 1], 2)) {
+		if (!approximatelyEqual(ty1, t1[(4 * i) + 1], allowedEpsilon)) {
 			printf("Point %zu resulted in difference in ty1. kernel = %lg, conditional = %lg, diff = %lg\n",
 				   i, t1[(4 * i) + 1], ty1, t1[(4 * i) + 1] - ty1);
 		    pointPassed = FALSE;
 		}
 		
-		if (!approximatelyEqual(tz0, t0[(4 * i) + 2], 2)) {
+		if (!approximatelyEqual(tz0, t0[(4 * i) + 2], allowedEpsilon)) {
 			printf("Point %zu resulted in difference in tz0. kernel = %lg, conditional = %lg, diff = %lg\n",
 				   i, t0[(4 * i) + 2], tz0, t0[(4 * i) + 2] - tz0);
 		    pointPassed = FALSE;
 		}
 		
-		if (!approximatelyEqual(tz1, t1[(4 * i) + 2], 2)) {
+		if (!approximatelyEqual(tz1, t1[(4 * i) + 2], allowedEpsilon)) {
 			printf("Point %zu resulted in difference in tz1. kernel = %lg, conditional = %lg, diff = %lg\n",
 				   i, t1[(4 * i) + 2], tz1, t1[(4 * i) + 2] - tz1);
 		    pointPassed = FALSE;
@@ -1231,7 +1244,7 @@ void ray_parameter(Octree* tree, Ray* r) {
     }
 }
 
-static inline void pruneNode(Node* node)
+static inline __attribute__((always_inline)) void pruneNode(Node* node)
 {
     if (nodeIsPrunable(node))
     {
