@@ -13,6 +13,7 @@
 
 #include "FastOctree.h"
 #include "Stack.h"
+#include "fast_code_utils.h"
 
 #define MAX(x,y) (((x) > (y)) ? (x) : (y))
 #define MIN(x,y) (((x) < (y)) ? (x) : (y))
@@ -502,15 +503,12 @@ void proc_subtree(double tx0, double ty0, double tz0,
 #endif
 }
 
-#define DBL_SGN_BIT(x) ((unsigned long long)(*((unsigned long long*)(&(x))) & 0x8000000000000000) >> 63)
-
-#define DBL_SGN_BIT(x) ((unsigned long long)(*((unsigned long long*)(&(x))) & 0x8000000000000000) >> 63)
-
 void ray_parameter_kernel(Octree* tree,
         float* endpoints, size_t numEndpoints,
         float* origin,
         float* t0, float* t1,
-        unsigned char* a, int* valid) {
+        unsigned char* a, int* valid)
+{
     int createdRoot = FALSE;
     if (tree->root == NULL) {
         // Using calloc instead of malloc initializes the memory to zero, which means that the the root's `children`
@@ -542,33 +540,29 @@ void ray_parameter_kernel(Octree* tree,
 
         // Micro-kernel 2: Reflect negative direction and calculate "a"
         {
-            const __m256 fourTwoOne = _mm256_setr_ps(4.f, 2.f, 1.f, 0.f, 4.f, 2.f, 1.f, 0.f);
+            const __m256i fourTwoOne = _mm256_setr_epi32(4, 2, 1, 0, 4, 2, 1, 0);
             union SignBitUnion {
                 uint32_t unsign;
                 int32_t sign;
             };
             static const union SignBitUnion signBitUnion = {.unsign = 0x80000000U};
             const __m256i signBits = _mm256_set1_epi32(signBitUnion.sign);
-            __m256 floatSignBits = _mm256_castsi256_ps(signBits);
             // Handle reflections when direction is negative
-            __m256 sign_bit_if_neg = _mm256_and_ps(direction, floatSignBits);
+            __m256i sign_bit_if_neg = _mm256_and_si256(_mm256_castps_si256(direction), signBits);
             // Toggle sign bit of origin if negative
-            originVec = _mm256_xor_ps(originVec, sign_bit_if_neg);
+            originVec = _mm256_castsi256_ps(_mm256_xor_si256(_mm256_castps_si256(originVec), sign_bit_if_neg));
             // Clears sign bit from direction if direction was negative
-            direction = _mm256_andnot_ps(sign_bit_if_neg, direction);
+            direction = _mm256_castsi256_ps(_mm256_andnot_si256(sign_bit_if_neg, _mm256_castps_si256(direction)));
 
             // Calculate "a"
-            const __m128i shift = _mm_set_epi64x(0, 31);   
-            __m256i sign_bit_if_neg_int = _mm256_castps_si256(sign_bit_if_neg);
-            sign_bit_if_neg = _mm256_castsi256_ps(_mm256_sra_epi32(sign_bit_if_neg_int, shift));
-            __m256 a_parts = _mm256_and_ps(sign_bit_if_neg, fourTwoOne);
-            // Convert a_parts into packed 32-bit signed integers
-            __m256i a_parts_int = _mm256_cvttps_epi32(a_parts);
+            const __m128i shift = _mm_set_epi64x(0, 31);
+            sign_bit_if_neg = _mm256_sra_epi32(sign_bit_if_neg, shift);
+            __m256i a_parts = _mm256_and_si256(sign_bit_if_neg, fourTwoOne);
             // Swap elements 0 and 1 of both the upper and lower halves
-            __m256i a_parts_int_shuff1 = _mm256_shuffle_epi32(a_parts_int, 0xE1);
-            __m256i partial_a_int = _mm256_or_si256(a_parts_int, a_parts_int_shuff1);
+            __m256i a_parts_int_shuff1 = _mm256_shuffle_epi32(a_parts, 0xE1);
+            __m256i partial_a_int = _mm256_or_si256(a_parts, a_parts_int_shuff1);
             // Put element 2 into slots 0 and 1 of both the upper and lower halves
-            a_parts_int_shuff1 = _mm256_shuffle_epi32(a_parts_int, 0xEA);
+            a_parts_int_shuff1 = _mm256_shuffle_epi32(a_parts, 0xEA);
             __m256i a_int = _mm256_or_si256(partial_a_int, a_parts_int_shuff1);
             // Now elements 0, 1, and 2 of both the upper and lower halves of a_int contain the
             // "a" value
@@ -591,14 +585,14 @@ void ray_parameter_kernel(Octree* tree,
             t1Vec = _mm256_mul_ps(t1Vec, dirInverse);
 
             // store t0 and t1 values
-            _mm256_store_ps(t0 + (i * 8), t0Vec);
-            _mm256_store_ps(t1 + (i * 8), t1Vec);
+            _mm256_store_ps(t0 + (i * 4), t0Vec);
+            _mm256_store_ps(t1 + (i * 4), t1Vec);
         }
 
         // Micro-kernel 4: Compare max of t0 and min of t1
         {
-            __m256 t0Vec = _mm256_load_ps(t0 + (i * 8));
-            __m256 t1Vec = _mm256_load_ps(t1 + (i * 8));
+            __m256 t0Vec = _mm256_load_ps(t0 + (i * 4));
+            __m256 t1Vec = _mm256_load_ps(t1 + (i * 4));
             // Swap elements 0 and 1 of both the upper and lower halves
             __m256 shuffled = _mm256_shuffle_ps(t0Vec, t0Vec, 0xE1);
             __m256 t0_max = _mm256_max_ps(t0Vec, shuffled);
@@ -626,10 +620,168 @@ void ray_parameter_kernel(Octree* tree,
     }
 }
 
+void ray_parameter_conditional(Octree* tree,
+                               Vector3d* points,
+                               size_t numPoints, Vector3d* sensorOrigin,
+                               double* t0, double* t1,
+                               unsigned char* a, int* valid)
+{
+    for (size_t i = 0; i < numPoints; ++i) {
+        Ray r;
+        initRay(&r,
+                sensorOrigin->x, sensorOrigin->y, sensorOrigin->z,
+                points[i].x, points[i].y, points[i].z);
+
+        unsigned char local_a = 0;
+
+        // Since the tree is centered at (0, 0, 0), reflecting the origins is as simple as negating them.
+        if (r.direction.x < 0.0f) {
+            r.origin.x = -r.origin.x;
+            r.direction.x = -r.direction.x;
+            local_a |= 4u;
+        }
+
+        if (r.direction.y < 0.0f) {
+            r.origin.y = -r.origin.y;
+            r.direction.y = -r.direction.y;
+            local_a |= 2u;
+        }
+
+        if (r.direction.z < 0.0f) {
+            r.origin.z = -r.origin.z;
+            r.direction.z = -r.direction.z;
+            local_a |= 1u;
+        }
+
+        // Improve IEEE double stability
+        double rdxInverse = 1.0 / r.direction.x;
+        double rdyInverse = 1.0 / r.direction.y;
+        double rdzInverse = 1.0 / r.direction.z;
+
+        double tx0 = (tree->min.x - r.origin.x) * rdxInverse;
+        double tx1 = (tree->max.x - r.origin.x) * rdxInverse;
+        double ty0 = (tree->min.y - r.origin.y) * rdyInverse;
+        double ty1 = (tree->max.y - r.origin.y) * rdyInverse;
+        double tz0 = (tree->min.z - r.origin.z) * rdzInverse;
+        double tz1 = (tree->max.z - r.origin.z) * rdzInverse;
+
+        a[i] = local_a;
+        valid[i] = (MAX(MAX(tx0, ty0), tz0) < MIN(MIN(tx1, ty1), tz1));
+        t0[(i * 4)] = tx0;
+        t0[(i * 4) + 1] = ty0;
+        t0[(i * 4) + 2] = tz0;
+        t1[(i * 4)] = tx1;
+        t1[(i * 4) + 1] = ty1;
+        t1[(i * 4) + 2] = tz1;
+    }
+}
+
 
 int approximatelyEqual(double a, double b, double epsilon)
 {
     return fabs(a - b) <= ( (fabs(a) < fabs(b) ? fabs(b) : fabs(a)) * epsilon);
+}
+
+void compare_ray_parameter_times(Octree* tree, Vector3d* points,
+                                 size_t numPoints, Vector3d* sensorOrigin)
+{
+    float *endpoints;
+    float *origin;
+    float *t0;
+    float *t1;
+    unsigned char *aVec;
+    int *valid;
+
+    // Allocate all of the memory for ray_parameter_kernel
+    size_t numPointsToUseForKernel = ((numPoints % 2 == 0) ? numPoints : numPoints + 1);
+
+    posix_memalign((void **) &endpoints, 32, sizeof(float) * (4 * numPointsToUseForKernel));
+    posix_memalign((void **) &origin, 32, sizeof(float) * 4);
+    posix_memalign((void **) &t0, 32, sizeof(float) * (4 * numPointsToUseForKernel));
+    posix_memalign((void **) &t1, 32, sizeof(float) * (4 * numPointsToUseForKernel));
+    posix_memalign((void **) &aVec, 32, sizeof(unsigned char) * numPointsToUseForKernel);
+    posix_memalign((void **) &valid, 32, sizeof(int) * numPointsToUseForKernel);
+
+    // Initialize endpoints and origin
+    for (size_t i = 0; i < numPointsToUseForKernel; ++i) {
+        if (i < numPoints) {
+            endpoints[(4 * i)] = (float) points[i].x;
+            endpoints[(4 * i) + 1] = (float) points[i].y;
+            endpoints[(4 * i) + 2] = (float) points[i].z;
+            endpoints[(4 * i) + 3] = 0.0f;
+        } else {
+            endpoints[(4 * i)] = 0.0f;
+            endpoints[(4 * i) + 1] = 0.0f;
+            endpoints[(4 * i) + 2] = 0.0f;
+            endpoints[(4 * i) + 3] = 0.0f;
+        }
+    }
+
+    origin[0] = (float) sensorOrigin->x;
+    origin[1] = (float) sensorOrigin->y;
+    origin[2] = (float) sensorOrigin->z;
+    origin[3] = 0.0f;
+
+    double *t0_conditional;
+    double *t1_conditional;
+    unsigned char *aVec_conditional;
+    int *valid_conditional;
+
+    // Allocate all of the memory for ray_parameter_conditional
+    posix_memalign((void **) &t0_conditional, 32, sizeof(double) * (4 * numPoints));
+    posix_memalign((void **) &t1_conditional, 32, sizeof(double) * (4 * numPoints));
+    posix_memalign((void **) &aVec_conditional, 32, sizeof(unsigned char) * numPoints);
+    posix_memalign((void **) &valid_conditional, 32, sizeof(int) * numPoints);
+
+    unsigned long long st = 0, et = 0;
+
+    st = rdtsc();
+    for (int i = 0; i < 1; ++i)
+    {
+        DO_HUNDRED_TIMES(
+            ray_parameter_kernel(tree,
+                endpoints, numPoints,
+                origin,
+                t0, t1,
+                aVec, valid);
+        )
+    }
+    et = rdtsc();
+
+    unsigned long long kernel_time_diff = et - st;
+    unsigned long long kernel_avg_total = (kernel_time_diff / 100ull) * NOMINAL_TO_BOOST_FREQUENCY_FACTOR;
+    unsigned long long kernel_avg_per_point = kernel_avg_total / numPoints;
+
+    st = rdtsc();
+    for (int i = 0; i < 1; ++i)
+    {
+        DO_HUNDRED_TIMES(
+                ray_parameter_conditional(tree, points,
+                                          numPoints, sensorOrigin,
+                                     t0_conditional, t1_conditional,
+                                     aVec_conditional, valid_conditional);
+        )
+    }
+    et = rdtsc();
+
+    unsigned long long conditional_time_diff = et - st;
+    unsigned long long conditional_avg_total = (conditional_time_diff / 100ull) * NOMINAL_TO_BOOST_FREQUENCY_FACTOR;
+    unsigned long long conditional_avg_per_point = conditional_avg_total / numPoints;
+
+    printf("Kernel: cycles/cloud avg = %llu, cycles/point avg = %llu\n", kernel_avg_total, kernel_avg_per_point);
+    printf("Conditional: cycles/cloud avg = %llu, cycles/point avg = %llu\n", conditional_avg_total, conditional_avg_per_point);
+
+    free(endpoints);
+    free(origin);
+    free(t0);
+    free(t1);
+    free(aVec);
+    free(valid);
+
+    free(t0_conditional);
+    free(t1_conditional);
+    free(aVec_conditional);
+    free(valid_conditional);
 }
 
 int check_ray_parameter_kernel_correctness(Octree* tree, Vector3d* points, 

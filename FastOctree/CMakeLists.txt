@@ -2,12 +2,12 @@ cmake_minimum_required(VERSION 2.8.8)
 project(FastOctree C)
 
 set(CMAKE_C_STANDARD 99)
-set(CMAKE_C_FLAGS "-std=c99 -Wall -march=native -g")
+set(CMAKE_C_FLAGS "-std=c99 -Wall -march=native -g -O2")
 
-add_executable(FastOctreeApp main.c FastOctree.c FastOctree.h Stack.c Stack.h)
+add_executable(FastOctreeApp main.c FastOctree.c FastOctree.h Stack.c Stack.h fast_code_utils.h)
 target_link_libraries(FastOctreeApp m)
 
-add_library(FastOctree FastOctree.c FastOctree.h Stack.c Stack.h)
+add_library(FastOctree FastOctree.c FastOctree.h Stack.c Stack.h fast_code_utils.h)
 target_link_libraries(FastOctree m)
 
 install(TARGETS FastOctreeApp DESTINATION bin)

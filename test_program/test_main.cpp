@@ -116,6 +116,8 @@ int main(int argc, char** argv)
 #if CHECK_KERNEL_CORRECTNESS
 			check_ray_parameter_kernel_correctness(&fastOctree, pointsBuffer, 
 											       numPoints, &sensorOrigin);
+			compare_ray_parameter_times(&fastOctree, pointsBuffer, 
+										numPoints, &sensorOrigin);
 #endif
 
 #if !INSERT_RAY_BY_RAY && !CHECK_KERNEL_CORRECTNESS

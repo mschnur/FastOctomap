@@ -40,7 +40,7 @@ set_target_properties(${TEST_EXECUTABLE_NAME} PROPERTIES
     CXX_EXTENSIONS NO
 )
 
-set(CMAKE_CXX_FLAGS "-std=c++11 -march=native -g")
+set(CMAKE_CXX_FLAGS "-std=c++11 -march=native -g -O2")
 #set(CMAKE_CXX_FLAGS "-std=c++11 -march=native -g -save-temps -fverbose-asm -S")
 #set(CMAKE_CXX_FLAGS "-std=c++11 -DUSE_REVELLES_RAY_TRACE_MOD_NODE=1")
 add_compile_options(-std=c++11)
