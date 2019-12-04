@@ -561,8 +561,7 @@ void ray_parameter_kernel(Octree* tree,
             direction = _mm256_castsi256_ps(_mm256_andnot_si256(sign_bit_if_neg, _mm256_castps_si256(direction)));
 
             // Calculate "a"
-            const __m128i shift = _mm_set_epi64x(0, 31);
-            sign_bit_if_neg = _mm256_sra_epi32(sign_bit_if_neg, shift);
+            sign_bit_if_neg = _mm256_srai_epi32(sign_bit_if_neg, 31);
             __m256i a_parts = _mm256_and_si256(sign_bit_if_neg, fourTwoOne);
             // Swap elements 0 and 1 of both the upper and lower halves
             __m256i a_parts_int_shuff1 = _mm256_shuffle_epi32(a_parts, 0xE1);
@@ -627,6 +626,118 @@ void ray_parameter_kernel(Octree* tree,
             valid[i] = (int) cmp_result[0]; // movss
             //__m256 cmp_hi = _mm256_unpackhi_ps(cmp_result, cmp_result); // vunpckhps
             valid[i + 1] = (int) cmp_result[4]; // movss
+        }
+    }
+}
+
+void ray_parameter_kernel_double(Octree* tree,
+                          double* endpoints, size_t numEndpoints,
+                                 double* origin,
+                                 double* t0, double* t1,
+                          unsigned char* a, int* valid)
+{
+    int createdRoot = FALSE;
+    if (tree->root == NULL) {
+        // Using calloc instead of malloc initializes the memory to zero, which means that the the root's `children`
+        // array will be filled with zeros (which is equivalent to filling it will NULL pointers). It also sets the
+        // root's log odds to 0, which we want as our initial value.
+        tree->root = (Node *) calloc(1, sizeof(Node));
+        createdRoot = TRUE;
+    }
+
+    //TODO: implement kernel as described in kernel_analysis/Readme.md
+    for (size_t i = 0; i < numEndpoints; ++i){
+        // Micro-kernel 1 v2: Calculate direction (single precision)
+        __m256d direction, originVec;
+
+        { // Scope this so that the temporaries can be reused
+            __m256d end = _mm256_load_pd(endpoints + (i * 4));
+            originVec = _mm256_load_pd(origin);
+            __m256d diff = _mm256_sub_pd(end, originVec);
+            __m256d d2 = _mm256_mul_pd(diff, diff);
+            __m256d d2_shuf = _mm256_shuffle_pd(d2, d2, 5);
+            __m256d part_sum = _mm256_add_pd(d2, d2_shuf);
+            // reuse the d2_shuf register
+            d2_shuf = _mm256_permute2f128_pd(part_sum, part_sum, 1);
+            __m256d magnitude = _mm256_add_pd(part_sum, d2_shuf);
+            magnitude = _mm256_sqrt_pd(magnitude);
+            direction = _mm256_div_pd(diff, magnitude);
+        }
+
+        // Micro-kernel 2: Reflect negative direction and calculate "a"
+        {
+            const __m256i fourTwoOne = _mm256_setr_epi64x(4, 2, 1, 0);
+            union SignBitUnion {
+                uint64_t unsign;
+                int64_t sign;
+            };
+            static const union SignBitUnion signBitUnion = {.unsign = 0x8000000000000000ull};
+            const __m256i signBits = _mm256_set1_epi64x(signBitUnion.sign);
+            // Handle reflections when direction is negative
+            __m256i sign_bit_if_neg = _mm256_and_si256(_mm256_castpd_si256(direction), signBits);
+            // Toggle sign bit of origin if negative
+            originVec = _mm256_castsi256_pd(_mm256_xor_si256(_mm256_castpd_si256(originVec), sign_bit_if_neg));
+            // Clears sign bit from direction if direction was negative
+            direction = _mm256_castsi256_pd(_mm256_andnot_si256(sign_bit_if_neg, _mm256_castpd_si256(direction)));
+
+            // Calculate "a"
+            sign_bit_if_neg = _mm256_srli_epi64(sign_bit_if_neg, 32);
+            sign_bit_if_neg = _mm256_srai_epi32(sign_bit_if_neg, 31);
+            __m256i a_parts = _mm256_and_si256(sign_bit_if_neg, fourTwoOne);
+            // Swap elements 0 and 1
+            __m256i a_parts_int_shuff1 = _mm256_castpd_si256(_mm256_permute_pd( _mm256_castsi256_pd(a_parts), 9));
+            __m256i partial_a_int = _mm256_or_si256(a_parts, a_parts_int_shuff1);
+            // Put element 2 into slots 0 and 1
+            a_parts_int_shuff1 = _mm256_permute4x64_epi64(a_parts, 0xEA);
+            __m256i a_int = _mm256_or_si256(partial_a_int, a_parts_int_shuff1);
+            // Now elements 0, 1, and 2  of a_int contain the "a" value
+            a[i] = (unsigned char) ((__v4di) a_int)[0];
+        }
+
+        // Micro-kernel 3: Compute t0 and t1
+        {
+            __m256d ones = _mm256_set1_pd(1.0);
+            // All axes have the same minimum, so we don't actually need separate minX, minY, minZ
+            __m256d treeMins = _mm256_set1_pd(tree->min.x);
+            // Same with the maximums
+            __m256d treeMaxes = _mm256_set1_pd(tree->max.x);
+            // Get the reciprocal of the direction
+            __m256d dirInverse  = _mm256_div_pd(ones, direction);
+            __m256d t0Vec = _mm256_sub_pd(treeMins, originVec);
+            t0Vec = _mm256_mul_pd(t0Vec, dirInverse);
+            __m256d t1Vec = _mm256_sub_pd(treeMaxes, originVec);
+            t1Vec = _mm256_mul_pd(t1Vec, dirInverse);
+
+            // store t0 and t1 values
+            _mm256_store_pd(t0 + (i * 4), t0Vec);
+            _mm256_store_pd(t1 + (i * 4), t1Vec);
+        }
+
+        // Micro-kernel 4: Compare max of t0 and min of t1
+        {
+            __m256d t0Vec = _mm256_load_pd(t0 + (i * 4));
+            __m256d t1Vec = _mm256_load_pd(t1 + (i * 4));
+            // Swap elements 0 and 1
+            __m256d shuffled = _mm256_permute_pd(t0Vec, 9);
+            __m256d t0_max = _mm256_max_pd(t0Vec, shuffled);
+            // Put element 2 into slots 0 and 1
+            shuffled = _mm256_permute4x64_pd(t0Vec, 0xEA);
+            t0_max = _mm256_max_pd(t0_max, shuffled);
+            // Now elements 0, 1, and 2 of t0_max contain the max t0 value
+
+            // Swap elements 0 and 1 of both the upper and lower halves
+            shuffled = _mm256_permute_pd(t1Vec, 9);
+            __m256d t1_min = _mm256_min_pd(t1Vec, shuffled);
+            // Put element 2 into slots 0 and 1 of both the upper and lower halves
+            shuffled = _mm256_permute4x64_pd(t1Vec, 0xEA);
+            t1_min = _mm256_min_pd(t1_min, shuffled);
+            // Now elements 0, 1, and 2 of t1_min contain the min t1 value
+
+            // each 32-bit element in cmp_result will contain 0xFFFFFFFF if max
+            // is less than min for that index, otherwise it will contain 0
+            // vcmpps (0x11 == _CMP_LT_OQ == less-than, ordered, non-signaling)
+            __m256d cmp_result = _mm256_cmp_pd(t0_max, t1_min, 0x11);
+            valid[i] = (int) cmp_result[0]; // movss
         }
     }
 }
@@ -914,6 +1025,42 @@ void compare_ray_parameter_times(Octree* tree, Vector3d* points,
     origin[2] = (float) sensorOrigin->z;
     origin[3] = 0.0f;
 
+    double* endpoints_d;
+    double* origin_d;
+    double* t0_d;
+    double* t1_d;
+    unsigned char* aVec_d;
+    int* valid_d;
+
+    // Allocate all of the memory for ray_parameter_kernel_double
+    posix_memalign((void**) &endpoints_d, 32, sizeof(double) * (4 * numPointsToUseForKernel));
+    posix_memalign((void**) &origin_d, 32, sizeof(double) * 4);
+    posix_memalign((void**) &t0_d, 32, sizeof(double) * (4 * numPointsToUseForKernel));
+    posix_memalign((void**) &t1_d, 32, sizeof(double) * (4 * numPointsToUseForKernel));
+    posix_memalign((void**) &aVec_d, 32, sizeof(unsigned char) * numPointsToUseForKernel);
+    posix_memalign((void**) &valid_d, 32, sizeof(int) * numPointsToUseForKernel);
+
+    // Initialize endpoints and origin
+    for (size_t i = 0; i < numPointsToUseForKernel; ++i)
+    {
+        if (i < numPoints) {
+            endpoints_d[(4 * i)] = points[i].x;
+            endpoints_d[(4 * i) + 1] = points[i].y;
+            endpoints_d[(4 * i) + 2] = points[i].z;
+            endpoints_d[(4 * i) + 3] = 0.0;
+        } else {
+            endpoints_d[(4 * i)] = 0.0;
+            endpoints_d[(4 * i) + 1] = 0.0;
+            endpoints_d[(4 * i) + 2] = 0.0;
+            endpoints_d[(4 * i) + 3] = 0.0;
+        }
+    }
+
+    origin_d[0] = sensorOrigin->x;
+    origin_d[1] = sensorOrigin->y;
+    origin_d[2] = sensorOrigin->z;
+    origin_d[3] = 0.0;
+
     double *t0_conditional;
     double *t1_conditional;
     unsigned char *aVec_conditional;
@@ -933,7 +1080,7 @@ void compare_ray_parameter_times(Octree* tree, Vector3d* points,
     {
         DO_HUNDRED_TIMES(
             ray_parameter_kernel(tree,
-                endpoints, numPoints,
+                endpoints, numPointsToUseForKernel,
                 origin,
                 t0, t1,
                 aVec, valid);
@@ -944,6 +1091,23 @@ void compare_ray_parameter_times(Octree* tree, Vector3d* points,
     unsigned long long kernel_time_diff = et - st;
     unsigned long long kernel_avg_total = (kernel_time_diff / (100ull * numIters)) * NOMINAL_TO_BOOST_FREQUENCY_FACTOR;
     unsigned long long kernel_avg_per_point = kernel_avg_total / numPoints;
+
+    st = rdtsc();
+    for (unsigned long long i = 0; i < numIters; ++i)
+    {
+        DO_HUNDRED_TIMES(
+                ray_parameter_kernel_double(tree,
+                                     endpoints_d, numPointsToUseForKernel,
+                                     origin_d,
+                                     t0_d, t1_d,
+                                     aVec_d, valid_d);
+        )
+    }
+    et = rdtsc();
+
+    unsigned long long kernel_double_time_diff = et - st;
+    unsigned long long kernel_double_avg_total = (kernel_double_time_diff / (100ull * numIters)) * NOMINAL_TO_BOOST_FREQUENCY_FACTOR;
+    unsigned long long kernel_double_avg_per_point = kernel_double_avg_total / numPoints;
 
     st = rdtsc();
     for (unsigned long long i = 0; i < numIters; ++i)
@@ -997,7 +1161,8 @@ void compare_ray_parameter_times(Octree* tree, Vector3d* points,
     printf("Conditional: cycles/cloud avg = %llu, cycles/point avg = %llu\n", conditional_avg_total, conditional_avg_per_point);
     printf("Removed Conditions: cycles/cloud avg = %llu, cycles/point avg = %llu\n", unconditional_avg_total, unconditional_avg_per_point);
     printf("Removed Conditions - Assembly: cycles/cloud avg = %llu, cycles/point avg = %llu\n", unconditional_asm_avg_total, unconditional_asm_avg_per_point);
-    printf("SIMD: cycles/cloud avg = %llu, cycles/point avg = %llu\n", kernel_avg_total, kernel_avg_per_point);
+    printf("SIMD - doubles: cycles/cloud avg = %llu, cycles/point avg = %llu\n", kernel_double_avg_total, kernel_double_avg_per_point);
+    printf("SIMD - floats: cycles/cloud avg = %llu, cycles/point avg = %llu\n", kernel_avg_total, kernel_avg_per_point);
 
     free(endpoints);
     free(origin);
@@ -1005,6 +1170,13 @@ void compare_ray_parameter_times(Octree* tree, Vector3d* points,
     free(t1);
     free(aVec);
     free(valid);
+
+    free(endpoints_d);
+    free(origin_d);
+    free(t0_d);
+    free(t1_d);
+    free(aVec_d);
+    free(valid_d);
 
     free(t0_conditional);
     free(t1_conditional);
@@ -1045,6 +1217,37 @@ int check_ray_parameter_kernel_correctness(Octree* tree, Vector3d* points,
     origin[3] = 0.0f;
 
     ray_parameter_kernel(tree, endpoints, numPoints, origin, t0, t1, aVec, valid);
+
+    double* endpoints_d;
+    double* origin_d;
+    double* t0_d;
+    double* t1_d;
+    unsigned char* aVec_d;
+    int* valid_d;
+
+    // Allocate all of the memory for ray_parameter_kernel_double
+    posix_memalign((void**) &endpoints_d, 32, sizeof(double) * (4 * numPoints));
+    posix_memalign((void**) &origin_d, 32, sizeof(double) * 4);
+    posix_memalign((void**) &t0_d, 32, sizeof(double) * (4 * numPoints));
+    posix_memalign((void**) &t1_d, 32, sizeof(double) * (4 * numPoints));
+    posix_memalign((void**) &aVec_d, 32, sizeof(unsigned char) * numPoints);
+    posix_memalign((void**) &valid_d, 32, sizeof(int) * numPoints);
+
+    // Initialize endpoints and origin
+    for (size_t i = 0; i < numPoints; ++i)
+    {
+        endpoints_d[(4 * i)] = points[i].x;
+        endpoints_d[(4 * i) + 1] = points[i].y;
+        endpoints_d[(4 * i) + 2] = points[i].z;
+        endpoints_d[(4 * i) + 3] = 0.0;
+    }
+
+    origin_d[0] = sensorOrigin->x;
+    origin_d[1] = sensorOrigin->y;
+    origin_d[2] = sensorOrigin->z;
+    origin_d[3] = 0.0;
+
+    ray_parameter_kernel_double(tree, endpoints_d, numPoints, origin_d, t0_d, t1_d, aVec_d, valid_d);
 
 	for (size_t i = 0; i < numPoints; ++i)
 	{
@@ -1139,6 +1342,58 @@ int check_ray_parameter_kernel_correctness(Octree* tree, Vector3d* points,
 				   i, t1[(4 * i) + 2], tz1, t1[(4 * i) + 2] - tz1);
 		    pointPassed = FALSE;
 		}
+
+		//////
+		////// Kernel double checks
+		//////
+		
+        if (aVec_d[i] != a) {
+            printf("Point %zu resulted in difference in a. kernel_double = %u, conditional = %u\n",
+                   i, aVec_d[i], a);
+            pointPassed = FALSE;
+        }
+
+        if (!((valid_d[i] && thisRayValid) || (!valid_d[i] && !thisRayValid))) {
+            printf("Point %zu resulted in difference in valid. kernel_double = %s, conditional = %s\n",
+                   i, (valid_d[i] ? "valid" : "invalid"), (thisRayValid ? "valid" : "invalid"));
+            pointPassed = FALSE;
+        }
+
+        if (!approximatelyEqual(tx0, t0_d[(4 * i)], allowedEpsilon)) {
+            printf("Point %zu resulted in difference in tx0. kernel_double = %lg, conditional = %lg, diff = %lg\n",
+                   i, t0_d[(4 * i)], tx0, t0_d[(4 * i)] - tx0);
+            pointPassed = FALSE;
+        }
+
+        if (!approximatelyEqual(tx1, t1_d[(4 * i)], allowedEpsilon)) {
+            printf("Point %zu resulted in difference in tx1. kernel_double = %lg, conditional = %lg, diff = %lg\n",
+                   i, t1_d[(4 * i)], tx1, t1_d[(4 * i)] - tx1);
+            pointPassed = FALSE;
+        }
+
+        if (!approximatelyEqual(ty0, t0_d[(4 * i) + 1], allowedEpsilon)) {
+            printf("Point %zu resulted in difference in ty0. kernel_double = %lg, conditional = %lg, diff = %lg\n",
+                   i, t0_d[(4 * i) + 1], ty0, t0_d[(4 * i) + 1] - ty0);
+            pointPassed = FALSE;
+        }
+
+        if (!approximatelyEqual(ty1, t1_d[(4 * i) + 1], allowedEpsilon)) {
+            printf("Point %zu resulted in difference in ty1. kernel_double = %lg, conditional = %lg, diff = %lg\n",
+                   i, t1_d[(4 * i) + 1], ty1, t1_d[(4 * i) + 1] - ty1);
+            pointPassed = FALSE;
+        }
+
+        if (!approximatelyEqual(tz0, t0_d[(4 * i) + 2], allowedEpsilon)) {
+            printf("Point %zu resulted in difference in tz0. kernel_double = %lg, conditional = %lg, diff = %lg\n",
+                   i, t0_d[(4 * i) + 2], tz0, t0_d[(4 * i) + 2] - tz0);
+            pointPassed = FALSE;
+        }
+
+        if (!approximatelyEqual(tz1, t1_d[(4 * i) + 2], allowedEpsilon)) {
+            printf("Point %zu resulted in difference in tz1. kernel_double = %lg, conditional = %lg, diff = %lg\n",
+                   i, t1_d[(4 * i) + 2], tz1, t1_d[(4 * i) + 2] - tz1);
+            pointPassed = FALSE;
+        }
 		
 		if (!pointPassed) {
 			return FALSE;
@@ -1153,6 +1408,13 @@ int check_ray_parameter_kernel_correctness(Octree* tree, Vector3d* points,
     free(t1);
     free(aVec);
     free(valid);
+
+    free(endpoints_d);
+    free(origin_d);
+    free(t0_d);
+    free(t1_d);
+    free(aVec_d);
+    free(valid_d);
 
 	return 0;
 }
