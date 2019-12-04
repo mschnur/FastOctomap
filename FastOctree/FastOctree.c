@@ -687,40 +687,6 @@ void ray_parameter_conditional(Octree* tree,
     }
 }
 
-static const uint64_t SIGN_BIT_ONLY = 0x8000000000000000ull;
-static const uint64_t ALL_BUT_SIGN_BIT = 0x7FFFFFFFFFFFFFFFull;
-
-// sign_bit_if_neg = directionX & 0x8000000000000000;
-// originX = originX XOR sign_bit_if_neg;
-// directionX = directionX & 0x7FFFFFFFFFFFFFFF;
-// sign_bit_if_neg = sign_bit_if_neg >> 63; // right shift sign-extend
-// partial_a = a_number & sign_bit_if_neg;
-// local_a = local_a | partial_a;
-#define REFLECT_AND_SET_A_WITHOUT_CONDITION(direction, origin, local_a, a_number) \
-    { \
-        __asm__ __volatile__( \
-            "mov %[dir], %%r8\n\t" \
-            "or %[signBit], %%r8 \n\t" \
-            "xor %%r8, %[ori]\n\t" \
-            "and %[allButSignBit], %[dir]\n\t" \
-            "sar $63, %%r8\n\t" \
-            "mov %[a_num], %%r9\n\t" \
-            "or %%r9, %[loc_a]\n\t" \
-            : [dir] "+r" (direction), \
-              [ori] "+r" (origin), \
-              [loc_a] "+r" (local_a) \
-            : [signBit] "r" (SIGN_BIT_ONLY), \
-              [allButSignBit] "r" (ALL_BUT_SIGN_BIT), \
-              [a_num] "g" (a_number) \
-            : "r8", "r9" \
-        ); \
-    }
-    //"movabsq $0x7FFFFFFFFFFFFFFF, %r11\n\t"
-    /*
-     * [signBit] "rm" (0x8000000000000000ull), \
-              [allButSignBit] "rm" (0x7FFFFFFFFFFFFFFFull) \
-     */
-
 void ray_parameter_removed_conditional(Octree* tree,
                                        Vector3d* points,
                                        size_t numPoints, Vector3d* sensorOrigin,
@@ -831,6 +797,36 @@ void ray_parameter_removed_conditional(Octree* tree,
     }
 }
 
+static const uint64_t SIGN_BIT_ONLY = 0x8000000000000000ull;
+static const uint64_t ALL_BUT_SIGN_BIT = 0x7FFFFFFFFFFFFFFFull;
+
+// sign_bit_if_neg = directionX & 0x8000000000000000;
+// originX = originX XOR sign_bit_if_neg;
+// directionX = directionX & 0x7FFFFFFFFFFFFFFF;
+// sign_bit_if_neg = sign_bit_if_neg >> 63; // right shift sign-extend
+// partial_a = a_number & sign_bit_if_neg;
+// local_a = local_a | partial_a;
+#define REFLECT_AND_SET_A_WITHOUT_CONDITION(direction, origin, local_a, a_number) \
+    { \
+        __asm__ __volatile__( \
+            "mov %[dir], %%r8\n\t" \
+            "or %[signBit], %%r8 \n\t" \
+            "xor %%r8, %[ori]\n\t" \
+            "and %[allButSignBit], %[dir]\n\t" \
+            "sar $63, %%r8\n\t" \
+            "mov %[a_num], %%r9\n\t" \
+            "or %%r9, %[loc_a]\n\t" \
+            : [dir] "+r" (direction), \
+              [ori] "+r" (origin), \
+              [loc_a] "+r" (local_a) \
+            : [signBit] "r" (SIGN_BIT_ONLY), \
+              [allButSignBit] "r" (ALL_BUT_SIGN_BIT), \
+              [a_num] "g" (a_number) \
+            : "r8", "r9" \
+        ); \
+    }
+
+
 void ray_parameter_removed_conditional_asm(Octree* tree,
                                        Vector3d* points,
                                        size_t numPoints, Vector3d* sensorOrigin,
@@ -930,9 +926,10 @@ void compare_ray_parameter_times(Octree* tree, Vector3d* points,
     posix_memalign((void **) &valid_conditional, 32, sizeof(int) * numPoints);
 
     unsigned long long st = 0, et = 0;
+	unsigned long long numIters = 10; 
 
     st = rdtsc();
-    for (int i = 0; i < 1; ++i)
+    for (unsigned long long i = 0; i < numIters; ++i)
     {
         DO_HUNDRED_TIMES(
             ray_parameter_kernel(tree,
@@ -945,11 +942,11 @@ void compare_ray_parameter_times(Octree* tree, Vector3d* points,
     et = rdtsc();
 
     unsigned long long kernel_time_diff = et - st;
-    unsigned long long kernel_avg_total = (kernel_time_diff / 100ull) * NOMINAL_TO_BOOST_FREQUENCY_FACTOR;
+    unsigned long long kernel_avg_total = (kernel_time_diff / (100ull * numIters)) * NOMINAL_TO_BOOST_FREQUENCY_FACTOR;
     unsigned long long kernel_avg_per_point = kernel_avg_total / numPoints;
 
     st = rdtsc();
-    for (int i = 0; i < 1; ++i)
+    for (unsigned long long i = 0; i < numIters; ++i)
     {
         DO_HUNDRED_TIMES(
                 ray_parameter_conditional(tree, points,
@@ -961,11 +958,11 @@ void compare_ray_parameter_times(Octree* tree, Vector3d* points,
     et = rdtsc();
 
     unsigned long long conditional_time_diff = et - st;
-    unsigned long long conditional_avg_total = (conditional_time_diff / 100ull) * NOMINAL_TO_BOOST_FREQUENCY_FACTOR;
+    unsigned long long conditional_avg_total = (conditional_time_diff / (100ull * numIters)) * NOMINAL_TO_BOOST_FREQUENCY_FACTOR;
     unsigned long long conditional_avg_per_point = conditional_avg_total / numPoints;
 
     st = rdtsc();
-    for (int i = 0; i < 1; ++i)
+    for (unsigned long long i = 0; i < numIters; ++i)
     {
         DO_HUNDRED_TIMES(
                 ray_parameter_removed_conditional(tree, points,
@@ -977,11 +974,11 @@ void compare_ray_parameter_times(Octree* tree, Vector3d* points,
     et = rdtsc();
 
     unsigned long long unconditional_time_diff = et - st;
-    unsigned long long unconditional_avg_total = (unconditional_time_diff / 100ull) * NOMINAL_TO_BOOST_FREQUENCY_FACTOR;
+    unsigned long long unconditional_avg_total = (unconditional_time_diff / (100ull * numIters)) * NOMINAL_TO_BOOST_FREQUENCY_FACTOR;
     unsigned long long unconditional_avg_per_point = unconditional_avg_total / numPoints;
 
     st = rdtsc();
-    for (int i = 0; i < 1; ++i)
+    for (unsigned long long i = 0; i < numIters; ++i)
     {
         DO_HUNDRED_TIMES(
                 ray_parameter_removed_conditional_asm(tree, points,
@@ -993,7 +990,7 @@ void compare_ray_parameter_times(Octree* tree, Vector3d* points,
     et = rdtsc();
 
     unsigned long long unconditional_asm_time_diff = et - st;
-    unsigned long long unconditional_asm_avg_total = (unconditional_asm_time_diff / 100ull) * NOMINAL_TO_BOOST_FREQUENCY_FACTOR;
+    unsigned long long unconditional_asm_avg_total = (unconditional_asm_time_diff / (100ull * numIters)) * NOMINAL_TO_BOOST_FREQUENCY_FACTOR;
     unsigned long long unconditional_asm_avg_per_point = unconditional_asm_avg_total / numPoints;
 
 

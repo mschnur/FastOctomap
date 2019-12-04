@@ -116,8 +116,13 @@ int main(int argc, char** argv)
 #if CHECK_KERNEL_CORRECTNESS
 			check_ray_parameter_kernel_correctness(&fastOctree, pointsBuffer, 
 											       numPoints, &sensorOrigin);
-			compare_ray_parameter_times(&fastOctree, pointsBuffer, 
-										numPoints, &sensorOrigin);
+		    for (int i = 1; i <= 10; ++i)
+			{
+				size_t numPointsThisIter = (numPoints * i) / 10;
+				std::cout << "Num points this iter: " << numPointsThisIter << std::endl;
+				compare_ray_parameter_times(&fastOctree, pointsBuffer, 
+											numPointsThisIter, &sensorOrigin);
+			}
 #endif
 
 #if !INSERT_RAY_BY_RAY && !CHECK_KERNEL_CORRECTNESS
