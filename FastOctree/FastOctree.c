@@ -198,7 +198,7 @@ static inline int is_between_vector3d(const Vector3d* min,
 // Core algorithm functions
 //###########################################################################################
 
-int new_node(double txm, int x, double tym, int y, double tzm, int z)
+static inline int new_node(double txm, int x, double tym, int y, double tzm, int z)
 {
     unsigned long long currentNode = 0;
 
@@ -232,34 +232,14 @@ static inline long long compute_valid_node(double t1,double t2,double t3, double
                         & 0x8000000000000000)>>63;
 }
 
-void proc_subtree(double* tx0, double* ty0, double* tz0,
-                  double* tx1, double* ty1, double* tz1,
+void proc_subtree(double* ray_params,
                   int numRays, unsigned int depth,
-                  Node* n, unsigned char* a, double* endpoint) {
-    #ifdef DEBUG_TRACE_FUNCTION_CALLS
-        //printf("proc_subtree, depth=%u\n", depth);
-    #endif
-
-    #ifdef DEBUG_PROC_SUBTREE
-        printf("proc_subtree called with depth = %u, a = %u, justCreated = %s, r->t_end = %lf\n"
-            "                         tx0 = %lf, ty0 = %lf, tz0 = %lf,\n"
-            "                         tx1 = %lf, ty1 = %lf, tz1 = %lf\n",
-            depth, a, (justCreated ? "TRUE" : "FALSE"), r->t_end, tx0, ty0, tz0, tx1, ty1, tz1);
-    #endif
-
+                  Node* n, unsigned char* a) {
     
-
     if (depth == MAX_DEPTH) {
         int hits = 0;
-        for(int i = 0; i < numRays; i++){
-            #ifdef DEBUG_PROC_SUBTREE
-                    printf("depth is equal to MAX_DEPTH, so updating the log likelihood of this node\n");
-            #endif
-
-            if (!any_is_greater(endpoint[i], endpoint[i], endpoint[i], tx1[i], ty1[i], tz1[i])) {
-                #ifdef DEBUG_PROC_SUBTREE
-                            printf("r->t_end is greater than any of tx1, ty1, and tz1; voting a MISS\n");
-                #endif
+        for(int i = 0; i < 7*numRays; i+=7){
+            if (!any_is_greater(ray_params[i+6], ray_params[i+6], ray_params[i+6], ray_params[i+3], ray_params[i+4], ray_params[i+5])) {
                 // The ray endpoint does not occur in this subtree, but the ray passes through this subtree on its
                 // way to the endpoint, and we're at our maximum depth. Therefore we need to give this node a vote
                 // that it is free space.
@@ -269,10 +249,6 @@ void proc_subtree(double* tx0, double* ty0, double* tz0,
                 break; 
             }
         }
-
-        #ifdef DEBUG_PROC_SUBTREE
-                double previousLogOdds = n->logOdds;
-        #endif
 
         double logLikelihoodUpdate = 0.0;
         if(hits > 0){
@@ -284,71 +260,64 @@ void proc_subtree(double* tx0, double* ty0, double* tz0,
         // Do the update
         n->logOdds += logLikelihoodUpdate;
 
-        #ifdef DEBUG_PROC_SUBTREE
-                printf("Log-odds update changes log-odds from %lf to %lf\n",
-                        previousLogOdds, n->logOdds);
-                double preClampLogOdds = n->logOdds;
-        #endif
-
         // Clamp the logOdds between the min/max
         n->logOdds = fmax(CLAMPING_THRES_MIN, fmin(n->logOdds, CLAMPING_THRES_MAX));
-
-        #ifdef DEBUG_PROC_SUBTREE
-                printf("Clamping between bounds changes log-odds from %lf to %lf\n",
-                        preClampLogOdds, n->logOdds);
-        #endif
-
-        #ifdef DEBUG_PROC_SUBTREE
-                printf("Returning because we've updated the log odds of a node at the max depth\n");
-        #endif
         
-        free(tx0);
-        free(ty0);
-        free(tz0);
-        free(tx1);
-        free(ty1);
-        free(tz1);
-        free(endpoint);
+        free(ray_params);
         free(a);
 
         return;
     }
     //compute t_ms
-    double* txm = (double*)calloc(numRays, sizeof(double));
-    double* tym = (double*)calloc(numRays, sizeof(double));
-    double* tzm = (double*)calloc(numRays, sizeof(double));
-
+    double* mid_params = (double*)malloc(3*numRays*sizeof(double));
     unsigned char* nodes = (unsigned char*)calloc(numRays,sizeof(unsigned char));
+    int cur_index[8] = {0};
+    
     for(int i = 0; i < numRays; i++){
-        txm[i] = 0.5 * (tx0[i] + tx1[i]);
-        tym[i] = 0.5 * (ty0[i] + ty1[i]);
-        tzm[i] = 0.5 * (tz0[i] + tz1[i]);
+        mid_params[3*i]   = 0.5 * (ray_params[(7*i)] + ray_params[(7*i)+3]);
+        mid_params[(3*i)+1] = 0.5 * (ray_params[(7*i)+1] + ray_params[(7*i)+4]);
+        mid_params[(3*i)+2] = 0.5 * (ray_params[(7*i)+2] + ray_params[(7*i)+5]);
     }
     
-    int cur_index[8] = {0};
     for(int i = 0; i < numRays; i++){
         int currentNode = 0;
         double t1,t2,t3;
         int eq;
         long long valid_node;
         unsigned char tmp_node = 0;
-        
+
+        int rp_i = 7*i;
+        int md_i = 3*i;
+
+        double tx0 = ray_params[rp_i];
+        double ty0 = ray_params[rp_i+1];
+        double tz0 = ray_params[rp_i+2]; 
+        double tx1 = ray_params[rp_i+3];
+        double ty1 = ray_params[rp_i+4];
+        double tz1 = ray_params[rp_i+5];
+        double endpoint = ray_params[rp_i+6];
+
+        double txm = mid_params[md_i];
+        double tym = mid_params[md_i+1];
+        double tzm = mid_params[md_i+2];
 
         #ifdef DEBUG_PROC_SUBTREE
             printf("txm = %lf, tym = %lf, tzm = %lf\n", txm, tym, tzm);
         #endif
 
-        double tmp1 = ty0[i] - tx0[i];
-        double tmp2 = tz0[i] - tx0[i];
-        double tmp3 = tym[i] - tx0[i];
-        double tmp4 = tzm[i] - tx0[i];
+        
 
-        double tmp5 = tz0[i] - ty0[i];
-        double tmp6 = txm[i] - ty0[i];
-        double tmp7 = tzm[i] - ty0[i];
+        double tmp1 = ty0 - tx0;
+        double tmp2 = tz0 - tx0;
+        double tmp3 = tym - tx0;
+        double tmp4 = tzm - tx0;
 
-        double tmp8 = txm[i] - tz0[i];
-        double tmp9 = tym[i] - tz0[i];
+        double tmp5 = tz0 - ty0;
+        double tmp6 = txm - ty0;
+        double tmp7 = tzm - ty0;
+
+        double tmp8 = txm - tz0;
+        double tmp9 = tym - tz0;
 
 
         currentNode |= (int)((unsigned long long)(*((unsigned long long*)(&tmp1)) & *((unsigned long long*)(&tmp2)) & *((unsigned long long*)(&tmp3)) & 0x8000000000000000)>>62);
@@ -369,207 +338,213 @@ void proc_subtree(double* tx0, double* ty0, double* tz0,
 
         eq = ~(((1<<0) - currentNode)>>31);
         //this should compute if the currentNode is valid.
-        t1 = tx0[i] - endpoint[i];
-        t2 = ty0[i] - endpoint[i];
-        t3 = tz0[i] - endpoint[i];
-        valid_node = compute_valid_node(t1,t2,t3,txm[i],tym[i],tzm[i]);
+        t1 = tx0 - endpoint;
+        t2 = ty0 - endpoint;
+        t3 = tz0 - endpoint;
+        valid_node = compute_valid_node(t1,t2,t3,txm,tym,tzm);
         tmp_node = (unsigned char)(currentNode & valid_node & eq);
         nodes[i] |= tmp_node;//(tmp_node << a[i]) | (tmp_node >> (-a[i] & 7));
         cur_index[a[i]] += (1 & valid_node & eq);
-        currentNode = (new_node(txm[i], 4, tym[i], 2, tzm[i], 1) & eq) | (currentNode & ~eq);
+        currentNode = (new_node(txm, 4, tym, 2, tzm, 1) & eq) | (currentNode & ~eq);
 
         eq = ~(((1<<1) - currentNode)>>31);
-        t1 = tx0[i] - endpoint[i];
-        t2 = ty0[i] - endpoint[i];
-        t3 = tzm[i] - endpoint[i];
-        valid_node = compute_valid_node(t1,t2,t3,txm[i],tym[i],tz1[i]);
+        t1 = tx0 - endpoint;
+        t2 = ty0 - endpoint;
+        t3 = tzm - endpoint;
+        valid_node = compute_valid_node(t1,t2,t3,txm,tym,tz1);
         tmp_node = (unsigned char)(currentNode & valid_node & eq);
         nodes[i] |= tmp_node;//(tmp_node << a[i]) | (tmp_node >> (-a[i] & 7));
         cur_index[1u^a[i]] += (1 & valid_node & eq);
-        currentNode = (new_node(txm[i], 5, tym[i], 3, tz1[i], 8) & eq) | (currentNode & ~eq);
+        currentNode = (new_node(txm, 5, tym, 3, tz1, 8) & eq) | (currentNode & ~eq);
 
         eq = ~(((1<<2) - currentNode)>>31);
-        t1 = tx0[i] - endpoint[i];
-        t2 = tym[i] - endpoint[i];
-        t3 = tz0[i] - endpoint[i];
-        valid_node = compute_valid_node(t1,t2,t3,txm[i],ty1[i],tzm[i]);
+        t1 = tx0 - endpoint;
+        t2 = tym - endpoint;
+        t3 = tz0 - endpoint;
+        valid_node = compute_valid_node(t1,t2,t3,txm,ty1,tzm);
         tmp_node = (unsigned char)(currentNode & valid_node & eq);
         nodes[i] |= tmp_node;//(tmp_node << a[i]) | (tmp_node >> (-a[i] & 7));
         cur_index[2u^a[i]] += (1 & valid_node & eq);
-        currentNode = (new_node(txm[i], 6, ty1[i], 8, tzm[i], 3) & eq) | (currentNode & ~eq);
+        currentNode = (new_node(txm, 6, ty1, 8, tzm, 3) & eq) | (currentNode & ~eq);
 
         eq = ~(((1<<3) - currentNode)>>31);
-        t1 = tx0[i] - endpoint[i];
-        t2 = tym[i] - endpoint[i];
-        t3 = tzm[i] - endpoint[i];
-        valid_node = compute_valid_node(t1,t2,t3,txm[i],ty1[i],tz1[i]);
+        t1 = tx0 - endpoint;
+        t2 = tym - endpoint;
+        t3 = tzm - endpoint;
+        valid_node = compute_valid_node(t1,t2,t3,txm,ty1,tz1);
         tmp_node = (unsigned char)(currentNode & valid_node & eq);
         nodes[i] |= tmp_node;//(tmp_node << a[i]) | (tmp_node >> (-a[i] & 7));
         cur_index[3u^a[i]] += (1 & valid_node & eq);
-        currentNode = (new_node(txm[i], 7, ty1[i], 8, tz1[i], 8) & eq) | (currentNode & ~eq);
+        currentNode = (new_node(txm, 7, ty1, 8, tz1, 8) & eq) | (currentNode & ~eq);
 
         eq = ~(((1<<4) - currentNode)>>31);
-        t1 = txm[i] - endpoint[i];
-        t2 = ty0[i] - endpoint[i];
-        t3 = tz0[i] - endpoint[i];
-        valid_node = compute_valid_node(t1,t2,t3,tx1[i],tym[i],tzm[i]);
+        t1 = txm - endpoint;
+        t2 = ty0 - endpoint;
+        t3 = tz0 - endpoint;
+        valid_node = compute_valid_node(t1,t2,t3,tx1,tym,tzm);
         tmp_node = (unsigned char)(currentNode & valid_node & eq);
         nodes[i] |= tmp_node;//(tmp_node << a[i]) | (tmp_node >> (-a[i] & 7));
         cur_index[4u^a[i]] += (1 & valid_node & eq);
-        currentNode = (new_node(tx1[i], 8, tym[i], 6, tzm[i], 5) & eq) | (currentNode & ~eq);
+        currentNode = (new_node(tx1, 8, tym, 6, tzm, 5) & eq) | (currentNode & ~eq);
 
         eq = ~(((1<<5) - currentNode)>>31);
-        t1 = txm[i] - endpoint[i];
-        t2 = ty0[i] - endpoint[i];
-        t3 = tzm[i] - endpoint[i];
-        valid_node = compute_valid_node(t1,t2,t3,tx1[i],tym[i],tz1[i]);
+        t1 = txm - endpoint;
+        t2 = ty0 - endpoint;
+        t3 = tzm - endpoint;
+        valid_node = compute_valid_node(t1,t2,t3,tx1,tym,tz1);
         tmp_node = (unsigned char)(currentNode & valid_node & eq);
         nodes[i] |= tmp_node;//(tmp_node << a[i]) | (tmp_node >> (-a[i] & 7));
         cur_index[5u^a[i]] += (1 & valid_node & eq);
-        currentNode = (new_node(tx1[i], 8, tym[i], 7, tz1[i], 8) & eq) | (currentNode & ~eq);
+        currentNode = (new_node(tx1, 8, tym, 7, tz1, 8) & eq) | (currentNode & ~eq);
 
         eq = ~(((1<<6) - currentNode)>>31);
-        t1 = txm[i] - endpoint[i];
-        t2 = tym[i] - endpoint[i];
-        t3 = tz0[i] - endpoint[i];
-        valid_node = compute_valid_node(t1,t2,t3,tx1[i],ty1[i],tzm[i]);
+        t1 = txm - endpoint;
+        t2 = tym - endpoint;
+        t3 = tz0 - endpoint;
+        valid_node = compute_valid_node(t1,t2,t3,tx1, ty1,tzm);
         tmp_node = (unsigned char)(currentNode & valid_node & eq);
         nodes[i] |= tmp_node;//(tmp_node << a[i]) | (tmp_node >> (-a[i] & 7));
         cur_index[6u^a[i]] += (1 & valid_node & eq);
-        currentNode = (new_node(tx1[i], 8, ty1[i], 8, tzm[i], 7) & eq) | (currentNode & ~eq);
+        currentNode = (new_node(tx1, 8, ty1, 8, tzm, 7) & eq) | (currentNode & ~eq);
 
         eq = ~(((1<<7) - currentNode)>>31);
-        t1 = txm[i] - endpoint[i];
-        t2 = tym[i] - endpoint[i];
-        t3 = tzm[i] - endpoint[i];
-        valid_node = compute_valid_node(t1,t2,t3,tx1[i],ty1[i],tz1[i]);
+        t1 = txm - endpoint;
+        t2 = tym - endpoint;
+        t3 = tzm - endpoint;
+        valid_node = compute_valid_node(t1,t2,t3,tx1,ty1,tz1);
         tmp_node = (unsigned char)(currentNode & valid_node & eq);
         nodes[i] |= tmp_node;//(tmp_node << a[i]) | (tmp_node >> (-a[i] & 7));
         cur_index[7u^a[i]] += (1 & valid_node & eq);
     }
 
-
-    double* new_tx0[8] = {0};
-    double* new_ty0[8] = {0};
-    double* new_tz0[8] = {0};
-    double* new_tx1[8] = {0};
-    double* new_ty1[8] = {0};
-    double* new_tz1[8] = {0};
-    double* new_endpoints[8] = {0};
+    double* new_ray_params[8] = {0};
     unsigned char* new_a[8] = {0};
 
     for(int i = 0; i<8; i++){
         if(cur_index[i] > 0){
-            new_tx0[i] = (double*)calloc(cur_index[i], sizeof(double));
-            new_ty0[i] = (double*)calloc(cur_index[i], sizeof(double));
-            new_tz0[i] = (double*)calloc(cur_index[i], sizeof(double));
-            new_tx1[i] = (double*)calloc(cur_index[i], sizeof(double));
-            new_ty1[i] = (double*)calloc(cur_index[i], sizeof(double));
-            new_tz1[i] = (double*)calloc(cur_index[i], sizeof(double));
-            new_endpoints[i] = (double*)calloc(cur_index[i], sizeof(double));
+            new_ray_params[i] = (double*)malloc(7*cur_index[i]*sizeof(double));
             new_a[i] = (unsigned char*)calloc(cur_index[i], sizeof(unsigned char));
         }
     }
 
     int update_index[8] = {0};
     for(int i = 0; i < numRays; i++){
+        int rp_i = 7*i;
+        int md_i = 3*i;
+
+        double tx0 = ray_params[rp_i];
+        double ty0 = ray_params[rp_i+1];
+        double tz0 = ray_params[rp_i+2]; 
+        double tx1 = ray_params[rp_i+3];
+        double ty1 = ray_params[rp_i+4];
+        double tz1 = ray_params[rp_i+5];
+        double endpoint = ray_params[rp_i+6];
+
+        double txm = mid_params[md_i];
+        double tym = mid_params[md_i+1];
+        double tzm = mid_params[md_i+2];
+
+
+
         if(nodes[i] & (1u<<0)){
-            new_tx0[a[i]][update_index[a[i]]] = tx0[i];
-            new_ty0[a[i]][update_index[a[i]]] = ty0[i];
-            new_tz0[a[i]][update_index[a[i]]] = tz0[i];
-            new_tx1[a[i]][update_index[a[i]]] = txm[i];
-            new_ty1[a[i]][update_index[a[i]]] = tym[i];
-            new_tz1[a[i]][update_index[a[i]]] = tzm[i];
-            new_endpoints[a[i]][update_index[a[i]]] = endpoint[i];
+            rp_i = update_index[a[i]]*7;
+            new_ray_params[a[i]][rp_i]    = tx0;
+            new_ray_params[a[i]][rp_i+1]  = ty0;
+            new_ray_params[a[i]][rp_i+2]  = tz0;
+            new_ray_params[a[i]][rp_i+3]  = txm;
+            new_ray_params[a[i]][rp_i+4]  = tym;
+            new_ray_params[a[i]][rp_i+5]  = tzm;
+            new_ray_params[a[i]][rp_i+6]  = endpoint;
             new_a[a[i]][update_index[a[i]]] = a[i];
             update_index[a[i]]++;
         }
         if(nodes[i] & (1u<<1)){
-            new_tx0[1u^a[i]][update_index[1u^a[i]]] = tx0[i];
-            new_ty0[1u^a[i]][update_index[1u^a[i]]] = ty0[i];
-            new_tz0[1u^a[i]][update_index[1u^a[i]]] = tzm[i];
-            new_tx1[1u^a[i]][update_index[1u^a[i]]] = txm[i];
-            new_ty1[1u^a[i]][update_index[1u^a[i]]] = tym[i];
-            new_tz1[1u^a[i]][update_index[1u^a[i]]] = tz1[i];
-            new_endpoints[1u^a[i]][update_index[1u^a[i]]] = endpoint[i];
+            rp_i = update_index[1u^a[i]]*7;
+            new_ray_params[1u^a[i]][rp_i]   = tx0;
+            new_ray_params[1u^a[i]][rp_i+1] = ty0;
+            new_ray_params[1u^a[i]][rp_i+2] = tzm;
+            new_ray_params[1u^a[i]][rp_i+3] = txm;
+            new_ray_params[1u^a[i]][rp_i+4] = tym;
+            new_ray_params[1u^a[i]][rp_i+5] = tz1;
+            new_ray_params[1u^a[i]][rp_i+6] = endpoint;
             new_a[1u^a[i]][update_index[1u^a[i]]] = a[i];
             update_index[1u^a[i]]++;
         }
         if(nodes[i] & (1u<<2)){
-            new_tx0[2u^a[i]][update_index[2u^a[i]]] = tx0[i];
-            new_ty0[2u^a[i]][update_index[2u^a[i]]] = tym[i];
-            new_tz0[2u^a[i]][update_index[2u^a[i]]] = tz0[i];
-            new_tx1[2u^a[i]][update_index[2u^a[i]]] = txm[i];
-            new_ty1[2u^a[i]][update_index[2u^a[i]]] = ty1[i];
-            new_tz1[2u^a[i]][update_index[2u^a[i]]] = tzm[i];
-            new_endpoints[2u^a[i]][update_index[2u^a[i]]] = endpoint[i];
+            rp_i = update_index[2u^a[i]]*7;
+            new_ray_params[2u^a[i]][rp_i] = tx0;
+            new_ray_params[2u^a[i]][rp_i+1] = tym;
+            new_ray_params[2u^a[i]][rp_i+2] = tz0;
+            new_ray_params[2u^a[i]][rp_i+3] = txm;
+            new_ray_params[2u^a[i]][rp_i+4] = ty1;
+            new_ray_params[2u^a[i]][rp_i+5] = tzm;
+            new_ray_params[2u^a[i]][rp_i+6] = endpoint;
             new_a[2u^a[i]][update_index[2u^a[i]]] = a[i];
             update_index[2u^a[i]]++;
         }
         if(nodes[i] & (1u<<3)){
-            new_tx0[3u^a[i]][update_index[3u^a[i]]] = tx0[i];
-            new_ty0[3u^a[i]][update_index[3u^a[i]]] = tym[i];
-            new_tz0[3u^a[i]][update_index[3u^a[i]]] = tzm[i];
-            new_tx1[3u^a[i]][update_index[3u^a[i]]] = txm[i];
-            new_ty1[3u^a[i]][update_index[3u^a[i]]] = ty1[i];
-            new_tz1[3u^a[i]][update_index[3u^a[i]]] = tz1[i];
-            new_endpoints[3u^a[i]][update_index[3u^a[i]]] = endpoint[i];
+            rp_i = update_index[3u^a[i]]*7;
+            new_ray_params[3u^a[i]][rp_i] = tx0;
+            new_ray_params[3u^a[i]][rp_i+1] = tym;
+            new_ray_params[3u^a[i]][rp_i+2] = tzm;
+            new_ray_params[3u^a[i]][rp_i+3] = txm;
+            new_ray_params[3u^a[i]][rp_i+4] = ty1;
+            new_ray_params[3u^a[i]][rp_i+5] = tz1;
+            new_ray_params[3u^a[i]][rp_i+6] = endpoint;
             new_a[3u^a[i]][update_index[3u^a[i]]] = a[i];
             update_index[3u^a[i]]++;
         }
         if(nodes[i] & (1u<<4)){
-            new_tx0[4u^a[i]][update_index[4u^a[i]]] = txm[i];
-            new_ty0[4u^a[i]][update_index[4u^a[i]]] = ty0[i];
-            new_tz0[4u^a[i]][update_index[4u^a[i]]] = tz0[i];
-            new_tx1[4u^a[i]][update_index[4u^a[i]]] = tx1[i];
-            new_ty1[4u^a[i]][update_index[4u^a[i]]] = tym[i];
-            new_tz1[4u^a[i]][update_index[4u^a[i]]] = tzm[i];
-            new_endpoints[4u^a[i]][update_index[4u^a[i]]] = endpoint[i];
+            rp_i = update_index[4u^a[i]]*7;
+            new_ray_params[4u^a[i]][rp_i] = txm;
+            new_ray_params[4u^a[i]][rp_i+1] = ty0;
+            new_ray_params[4u^a[i]][rp_i+2] = tz0;
+            new_ray_params[4u^a[i]][rp_i+3] = tx1;
+            new_ray_params[4u^a[i]][rp_i+4] = tym;
+            new_ray_params[4u^a[i]][rp_i+5] = tzm;
+            new_ray_params[4u^a[i]][rp_i+6] = endpoint;
             new_a[4u^a[i]][update_index[4u^a[i]]] = a[i];
             update_index[4u^a[i]]++;
         }
         if(nodes[i] & (1u<<5)){
-            new_tx0[5u^a[i]][update_index[5u^a[i]]] = txm[i];
-            new_ty0[5u^a[i]][update_index[5u^a[i]]] = ty0[i];
-            new_tz0[5u^a[i]][update_index[5u^a[i]]] = tzm[i];
-            new_tx1[5u^a[i]][update_index[5u^a[i]]] = tx1[i];
-            new_ty1[5u^a[i]][update_index[5u^a[i]]] = tym[i];
-            new_tz1[5u^a[i]][update_index[5u^a[i]]] = tz1[i];
-            new_endpoints[5u^a[i]][update_index[5u^a[i]]] = endpoint[i];
+            rp_i = update_index[5u^a[i]]*7;
+            new_ray_params[5u^a[i]][rp_i] = txm;
+            new_ray_params[5u^a[i]][rp_i+1] = ty0;
+            new_ray_params[5u^a[i]][rp_i+2] = tzm;
+            new_ray_params[5u^a[i]][rp_i+3] = tx1;
+            new_ray_params[5u^a[i]][rp_i+4] = tym;
+            new_ray_params[5u^a[i]][rp_i+5] = tz1;
+            new_ray_params[5u^a[i]][rp_i+6] = endpoint;
             new_a[5u^a[i]][update_index[5u^a[i]]] = a[i];
             update_index[5u^a[i]]++;
         }
         if(nodes[i] & (1u<<6)){
-            new_tx0[6u^a[i]][update_index[6u^a[i]]] = txm[i];
-            new_ty0[6u^a[i]][update_index[6u^a[i]]] = tym[i];
-            new_tz0[6u^a[i]][update_index[6u^a[i]]] = tz0[i];
-            new_tx1[6u^a[i]][update_index[6u^a[i]]] = tx1[i];
-            new_ty1[6u^a[i]][update_index[6u^a[i]]] = ty1[i];
-            new_tz1[6u^a[i]][update_index[6u^a[i]]] = tzm[i];
-            new_endpoints[6u^a[i]][update_index[6u^a[i]]] = endpoint[i];
+            rp_i = update_index[6u^a[i]]*7;
+            new_ray_params[6u^a[i]][rp_i] = txm;
+            new_ray_params[6u^a[i]][rp_i+1] = tym;
+            new_ray_params[6u^a[i]][rp_i+2] = tz0;
+            new_ray_params[6u^a[i]][rp_i+3] = tx1;
+            new_ray_params[6u^a[i]][rp_i+4] = ty1;
+            new_ray_params[6u^a[i]][rp_i+5] = tzm;
+            new_ray_params[6u^a[i]][rp_i+6] = endpoint;
             new_a[6u^a[i]][update_index[6u^a[i]]] = a[i];
             update_index[6u^a[i]]++;
         }
         if(nodes[i] & (1u<<7)){
-            new_tx0[7u^a[i]][update_index[7u^a[i]]] = txm[i];
-            new_ty0[7u^a[i]][update_index[7u^a[i]]] = tym[i];
-            new_tz0[7u^a[i]][update_index[7u^a[i]]] = tzm[i];
-            new_tx1[7u^a[i]][update_index[7u^a[i]]] = tx1[i];
-            new_ty1[7u^a[i]][update_index[7u^a[i]]] = ty1[i];
-            new_tz1[7u^a[i]][update_index[7u^a[i]]] = tz1[i];
-            new_endpoints[7u^a[i]][update_index[7u^a[i]]] = endpoint[i];
+            rp_i = update_index[7u^a[i]]*7;
+            new_ray_params[7u^a[i]][rp_i] = txm;
+            new_ray_params[7u^a[i]][rp_i+1] = tym;
+            new_ray_params[7u^a[i]][rp_i+2] = tzm;
+            new_ray_params[7u^a[i]][rp_i+3] = tx1;
+            new_ray_params[7u^a[i]][rp_i+4] = ty1;
+            new_ray_params[7u^a[i]][rp_i+5] = tz1;
+            new_ray_params[7u^a[i]][rp_i+6] = endpoint;
             new_a[7u^a[i]][update_index[7u^a[i]]] = a[i];
             update_index[7u^a[i]]++;
         }         
     }
 
-    free(tx0);
-    free(ty0);
-    free(tz0);
-    free(tx1);
-    free(ty1);
-    free(tz1);
-    free(endpoint);
+    free(ray_params);
     free(a);   
 
     free(nodes); 
@@ -579,22 +554,12 @@ void proc_subtree(double* tx0, double* ty0, double* tz0,
         if(cur_index[node] > 0){
             //assumes a is already handled by now
             createChildIfItDoesntExist(n, node);
-            proc_subtree(new_tx0[node], new_ty0[node], new_tz0[node],
-                         new_tx1[node], new_ty1[node], new_tz1[node],
+            proc_subtree(new_ray_params[node],
                          cur_index[node], depth + 1, 
-                         n->children[node], new_a[node], new_endpoints[node]);
+                         n->children[node], new_a[node]);
         }
     }
-
-    #ifdef DEBUG_PROC_SUBTREE
-        double previousOdds = n->logOdds;
-    #endif
         n->logOdds = maxChildLogLikelihood(n);
-
-    #ifdef DEBUG_PROC_SUBTREE
-        printf("Making the log-odds of this node equal to the max child log-odds changed the log-odds from %lf to %lf\n",
-                previousOdds, n->logOdds);
-    #endif
 }
 
 
@@ -608,50 +573,48 @@ void ray_parameter(Octree* tree, Ray* rays, int numRays) {
         createdRoot = TRUE;
     }
 
-    double* tx0 = (double*)calloc(numRays, sizeof(double));
-    double* ty0 = (double*)calloc(numRays, sizeof(double));
-    double* tz0 = (double*)calloc(numRays, sizeof(double));
-    double* tx1 = (double*)calloc(numRays, sizeof(double));
-    double* ty1 = (double*)calloc(numRays, sizeof(double));
-    double* tz1 = (double*)calloc(numRays, sizeof(double));
-    double* endpoints = (double*)calloc(numRays, sizeof(double));
     unsigned char* a = (unsigned char*)calloc(numRays, sizeof(unsigned char));
+    double* ray_params = (double*)malloc(7*numRays*sizeof(double));
 
     for(int i = 0; i < numRays; i++){
-        long long reflected, neg, cur, tmp;
+        long long reflected, neg, cur, tmp, sign_bit_if_negative;
         Ray* r = (rays+i);
 
-        reflected = *((long long*)(&(r->direction.x)))>>63;
-        cur = *((unsigned long long*)(&(r->origin.x)));
-        neg = *((unsigned long long*)(&(r->origin.x))) ^ 0x8000000000000000;
-        tmp = (neg & reflected) | (cur & ~reflected);
-        r->origin.x = *((double*)(&tmp));
+        // sign_bit_if_neg = directionX & 0x8000000000000000;
+        // originX = originX XOR sign_bit_if_neg;
+        // directionX = directionX & 0x7FFFFFFFFFFFFFFF;
+        // sign_bit_if_neg = sign_bit_if_neg >> 63; // right shift sign-extend
+        // partial_a = a_number & sign_bit_if_neg;
+        // local_a = local_a | partial_a;
+
         cur = *((unsigned long long*)(&(r->direction.x)));
-        neg = *((unsigned long long*)(&(r->direction.x))) & 0x7fffffffffffffff;
-        tmp = (neg & reflected) | (cur & ~reflected);
+        sign_bit_if_negative = cur & 0x8000000000000000ull;
+        tmp = *((unsigned long long*)(&(r->origin.x)));
+        tmp ^= sign_bit_if_negative;
+        r->origin.x = *((double*)(&tmp));
+        tmp = cur & 0x7fffffffffffffffull;
         r->direction.x = *((double*)(&tmp));
+        reflected = *((long long*)(&sign_bit_if_negative))>>63;
         a[i] |= (4u & reflected);
 
-        reflected = *((long long*)(&(r->direction.y)))>>63;
-        cur = *((unsigned long long*)(&(r->origin.y)));
-        neg = *((unsigned long long*)(&(r->origin.y))) ^ 0x8000000000000000;
-        tmp = (neg & reflected) | (cur & ~reflected);
-        r->origin.y = *((double*)(&tmp));
         cur = *((unsigned long long*)(&(r->direction.y)));
-        neg = *((unsigned long long*)(&(r->direction.y))) & 0x7fffffffffffffff;
-        tmp = (neg & reflected) | (cur & ~reflected);
+        sign_bit_if_negative = cur & 0x8000000000000000ull;
+        tmp = *((unsigned long long*)(&(r->origin.y)));
+        tmp ^= sign_bit_if_negative;
+        r->origin.y = *((double*)(&tmp));
+        tmp = cur & 0x7fffffffffffffffull;
         r->direction.y = *((double*)(&tmp));
+        reflected = *((long long*)(&sign_bit_if_negative))>>63;
         a[i] |= (2u & reflected);
 
-        reflected = *((long long*)(&(r->direction.z)))>>63;
-        cur = *((unsigned long long*)(&(r->origin.z)));
-        neg = *((unsigned long long*)(&(r->origin.z))) ^ 0x8000000000000000;
-        tmp = (neg & reflected) | (cur & ~reflected);
-        r->origin.z = *((double*)(&tmp));
         cur = *((unsigned long long*)(&(r->direction.z)));
-        neg = *((unsigned long long*)(&(r->direction.z))) & 0x7fffffffffffffff;
-        tmp = (neg & reflected) | (cur & ~reflected);
+        sign_bit_if_negative = cur & 0x8000000000000000ull;
+        tmp = *((unsigned long long*)(&(r->origin.z)));
+        tmp ^= sign_bit_if_negative;
+        r->origin.z = *((double*)(&tmp));
+        tmp = cur & 0x7fffffffffffffffull;
         r->direction.z = *((double*)(&tmp));
+        reflected = *((long long*)(&sign_bit_if_negative))>>63;
         a[i] |= (1u & reflected);
 
         // Improve IEEE double stability
@@ -659,28 +622,21 @@ void ray_parameter(Octree* tree, Ray* rays, int numRays) {
         double rdyInverse = 1.0 / r->direction.y;
         double rdzInverse = 1.0 / r->direction.z;
 
-        tx0[i] = (tree->min.x - r->origin.x) * rdxInverse;
-        tx1[i] = (tree->max.x - r->origin.x) * rdxInverse;
-        ty0[i] = (tree->min.y - r->origin.y) * rdyInverse;
-        ty1[i] = (tree->max.y - r->origin.y) * rdyInverse;
-        tz0[i] = (tree->min.z - r->origin.z) * rdzInverse;
-        tz1[i] = (tree->max.z - r->origin.z) * rdzInverse;
-        endpoints[i] = r->t_end;
+        int rp_i = 7*i;
+        ray_params[rp_i] = (tree->min.x - r->origin.x) * rdxInverse;
+        ray_params[rp_i+3] = (tree->max.x - r->origin.x) * rdxInverse;
+        ray_params[rp_i+1] = (tree->min.y - r->origin.y) * rdyInverse;
+        ray_params[rp_i+4] = (tree->max.y - r->origin.y) * rdyInverse;
+        ray_params[rp_i+2] = (tree->min.z - r->origin.z) * rdzInverse;
+        ray_params[rp_i+5] = (tree->max.z - r->origin.z) * rdzInverse;
+        ray_params[rp_i+6] = r->t_end;
     }
 
     free(rays);
 
-    // for(int i = 0; i < numRays; i++){
-        // for now assume our point cloud origin and all points exist within the actree bounds
-            // if (MAX(MAX(tx0, ty0), tz0) < MIN(MIN(tx1, ty1), tz1))
-            // {
-                proc_subtree(tx0, ty0, tz0, tx1, ty1, tz1, numRays, 0, tree->root, a, endpoints);
-            // }
-            // else
-            // {
-            //     printf("Ray outside of tree bounds\n");
-            // }
-    // }
+    // for now assume our point cloud origin and all points exist within the actree bounds
+    proc_subtree(ray_params, numRays, 0, tree->root, a);
+        
 }
 
 static inline void pruneNode(Node* node)
