@@ -1,4 +1,8 @@
+# Note: This repository was a class project. We never really got it working, so beware.
+
 # FastOctomap
+
+
 Just once, you'll need to extract the large data txt file, which can be done by running the script
 ```
 ./prepare_data_file.sh
