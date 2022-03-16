@@ -1,4 +1,4 @@
-# Note: This repository was a class project. We never really got it working, so beware.
+# Note: This repository was a class project. We never reached the level of performance we were hoping for, so beware.
 
 # FastOctomap
 
